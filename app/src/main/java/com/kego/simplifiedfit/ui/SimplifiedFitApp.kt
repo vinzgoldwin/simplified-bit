@@ -150,18 +150,11 @@ private fun AppHeader(
             Spacer(Modifier.width(4.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(title.uppercase(), color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 15.sp, letterSpacing = 2.4.sp))
-            if (subtitle != null) {
-                Spacer(Modifier.height(9.dp))
-                val parts = subtitle.split("  ·  ")
-                Text(parts.first(), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                if (parts.size > 1) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).background(FitColors.Cyan, CircleShape))
-                        Spacer(Modifier.width(8.dp))
-                        Text(parts.drop(1).joinToString("  ·  "), color = FitColors.Muted, fontSize = 12.sp, letterSpacing = .2.sp)
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title.uppercase(), color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 15.sp, letterSpacing = 2.4.sp))
+                if (subtitle != null) {
+                    Spacer(Modifier.width(14.dp))
+                    Text(subtitle, color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -450,7 +443,16 @@ private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
                 Box(Modifier.fillMaxWidth(item.value / 100f).fillMaxSize().background(FitColors.Violet, RoundedCornerShape(4.dp)))
             }
             Spacer(Modifier.width(13.dp))
-            Text(item.value.toString(), color = FitColors.White, fontSize = 18.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.End, modifier = Modifier.width(27.dp))
+            Text(
+                item.value.toString(),
+                color = FitColors.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(36.dp),
+            )
         }
         Rule()
     }
