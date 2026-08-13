@@ -222,7 +222,7 @@ private fun BottomNav(selected: Destination, onDestination: (Destination) -> Uni
     Column(Modifier.navigationBarsPadding()) {
         Rule()
         Row(Modifier.fillMaxWidth().height(66.dp)) {
-            NavItem("Today", FitIcon.TODAY, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
+            NavItem("Today", FitIcon.CALENDAR, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
             NavItem("Coach", FitIcon.COACH, selected == Destination.COACH, Modifier.weight(1f)) { onDestination(Destination.COACH) }
         }
     }
