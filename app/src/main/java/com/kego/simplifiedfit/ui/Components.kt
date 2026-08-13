@@ -244,9 +244,10 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                 drawLine(color, Offset(w * .25f, h * .5f), Offset(w * .72f, h * .86f), stroke.width, StrokeCap.Round)
             }
             FitIcon.SEND -> {
-                drawLine(color, Offset(w * .14f, h * .77f), Offset(w * .83f, h * .18f), stroke.width, StrokeCap.Round)
-                drawLine(color, Offset(w * .83f, h * .18f), Offset(w * .65f, h * .78f), stroke.width, StrokeCap.Round)
-                drawLine(color, Offset(w * .83f, h * .18f), Offset(w * .14f, h * .38f), stroke.width, StrokeCap.Round)
+                val sendStrokeWidth = 2.dp.toPx()
+                drawLine(color, Offset(w * .18f, h * .82f), Offset(w * .78f, h * .22f), sendStrokeWidth, StrokeCap.Round)
+                drawLine(color, Offset(w * .54f, h * .22f), Offset(w * .78f, h * .22f), sendStrokeWidth, StrokeCap.Round)
+                drawLine(color, Offset(w * .78f, h * .22f), Offset(w * .78f, h * .46f), sendStrokeWidth, StrokeCap.Round)
             }
             FitIcon.CLOCK -> {
                 drawCircle(color, w * .43f, Offset(w * .44f, h * .52f), style = stroke)
