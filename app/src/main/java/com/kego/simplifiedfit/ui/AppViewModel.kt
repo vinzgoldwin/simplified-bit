@@ -174,7 +174,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         fun trend(value: (DailyHealth) -> Float?): List<DayPoint> = (6 downTo 0).mapNotNull { offset ->
             val date = today.minusDays(offset.toLong())
             value(byDate[date] ?: return@mapNotNull null)?.let {
-                DayPoint(date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.ENGLISH), it)
+                DayPoint(date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH), it)
             }
         }
         val calories = current.totalCalories?.roundToInt() ?: 0
@@ -203,15 +203,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             validNights = count { (it.asleepMinutes ?: 0) >= 180 },
             stepTrend = trend { it.steps?.toFloat() },
             sleepTrend = trend { sleepBreakdowns[it.date]?.total?.toFloat() },
+            hrv = current.hrv ?: 0.0,
+            hrvTrend = trend { it.hrv?.toFloat() },
+            restingHeartRateTrend = trend { it.restingHeartRate?.toFloat() },
             calorieTrend = trend { it.totalCalories?.toFloat() },
         )
     }
 
     private fun HealthSnapshot.coachContext(): String = """
-        Today: readiness $readiness (provisional while the 30-day baseline develops), sleep score $sleepScore,
+        Today: readiness $readiness, sleep score $sleepScore,
         sleep ${sleepMinutes}min of ${sleepTargetMinutes}min target, steps $steps,
         latest heart rate $latestHeartRate bpm, resting heart rate $restingHeartRate bpm,
         total calories $totalCalories kcal, active calories $activeCalories kcal,
-        calibration nights $validNights, last Google Health sync $lastSync.
+        valid sleep nights $validNights, last Google Health sync $lastSync.
     """.trimIndent()
 }

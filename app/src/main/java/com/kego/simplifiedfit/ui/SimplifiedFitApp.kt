@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,6 +67,7 @@ import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
@@ -75,11 +77,16 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         val snapshot = state.snapshot
         var destination by remember { mutableStateOf(Destination.TODAY) }
         var detail by remember { mutableStateOf<Detail?>(null) }
+        var detailParent by remember { mutableStateOf<Detail?>(null) }
         var settings by remember { mutableStateOf(false) }
 
         BackHandler(detail != null || settings) {
-            detail = null
-            settings = false
+            if (settings) {
+                settings = false
+            } else {
+                detail = detailParent
+                detailParent = null
+            }
         }
 
         Box(Modifier.fillMaxSize().background(FitColors.Black)) {
@@ -92,10 +99,24 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     onToggleTheme = { darkTheme = !darkTheme },
                     onBack = { settings = false },
                 )
-                detail != null -> DetailScreen(detail!!, snapshot, onBack = { detail = null })
+                detail != null -> DetailScreen(
+                    detail = detail!!,
+                    snapshot = snapshot,
+                    onBack = {
+                        detail = detailParent
+                        detailParent = null
+                    },
+                    onDetail = {
+                        detailParent = detail
+                        detail = it
+                    },
+                )
                 destination == Destination.TODAY -> TodayScreen(
                     snapshot = snapshot,
-                    onDetail = { detail = it },
+                    onDetail = {
+                        detailParent = null
+                        detail = it
+                    },
                     onSettings = { settings = true },
                     onDestination = { destination = it },
                 )
@@ -207,11 +228,6 @@ private fun TodayScreen(
             MetricRow("Readiness", snapshot.readiness.toString(), "score", FitColors.Green, FitIcon.TODAY) { onDetail(Detail.READINESS) }
             MetricRow("Heart rate", snapshot.latestHeartRate.toString(), "bpm", FitColors.Coral, FitIcon.HEART) { onDetail(Detail.HEART) }
             MetricRow("Calories", snapshot.totalCalories.formatted(), "kcal", FitColors.Cyan, FitIcon.FIRE) { onDetail(Detail.CALORIES) }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).background(FitColors.Green, CircleShape))
-                Spacer(Modifier.width(9.dp))
-                Text("BASELINE  ·  ${snapshot.validNights} OF 30 NIGHTS", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
-            }
         }
         BottomNav(Destination.TODAY, onDestination)
     }
@@ -242,24 +258,33 @@ private fun NavItem(label: String, icon: FitIcon, selected: Boolean, modifier: M
 }
 
 @Composable
-private fun DetailScreen(detail: Detail, snapshot: HealthSnapshot, onBack: () -> Unit) {
+private fun DetailScreen(
+    detail: Detail,
+    snapshot: HealthSnapshot,
+    onBack: () -> Unit,
+    onDetail: (Detail) -> Unit,
+) {
     val title = when (detail) {
         Detail.READINESS -> "Readiness"
         Detail.SLEEP -> "Sleep"
         Detail.STEPS -> "Steps"
         Detail.HEART -> "Heart"
         Detail.CALORIES -> "Calories"
+        Detail.HRV -> "Heart rate variability"
+        Detail.RESTING_HEART_RATE -> "Resting heart rate"
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         AppHeader(title, "Thu, 13 Aug", onBack = onBack)
         Rule(Modifier.padding(horizontal = 22.dp))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             when (detail) {
-                Detail.READINESS -> ReadinessDetail(snapshot)
+                Detail.READINESS -> ReadinessDetail(snapshot, onDetail)
                 Detail.SLEEP -> SleepDetail(snapshot)
                 Detail.STEPS -> StepsDetail(snapshot)
                 Detail.HEART -> HeartDetail(snapshot)
                 Detail.CALORIES -> CaloriesDetail(snapshot)
+                Detail.HRV -> HrvDetail(snapshot)
+                Detail.RESTING_HEART_RATE -> RestingHeartRateDetail(snapshot)
             }
             Spacer(Modifier.height(4.dp).navigationBarsPadding())
         }
@@ -267,19 +292,155 @@ private fun DetailScreen(detail: Detail, snapshot: HealthSnapshot, onBack: () ->
 }
 
 @Composable
-private fun ReadinessDetail(snapshot: HealthSnapshot) {
+private fun ReadinessDetail(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 27.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp)
+        ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp, provisional = false)
     }
     Text("Readiness combines HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
-    Text("Score is provisional while Simplified Fit develops your personal baseline.", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 12.sp))
     SectionLabel("Signals")
     Rule()
-    DataRow("Heart-rate variability", "Personal", "baseline")
-    DataRow("Past week of sleep", "7", "nights")
-    DataRow("Resting heart rate", "Personal", "baseline")
-    SectionLabel("Calibration")
-    Text("${snapshot.validNights} valid nights collected. Readiness starts after 7 nights; the personal baseline keeps improving through 30 days.", color = FitColors.Muted, style = FitType.Body)
+    DataRow(
+        "Heart-rate variability",
+        metricValue(snapshot.hrv),
+        "ms",
+        FitColors.Green,
+        onClick = { onDetail(Detail.HRV) },
+    )
+    DataRow("Past week of sleep", snapshot.sleepTrend.size.toString(), "nights")
+    DataRow(
+        "Resting heart rate",
+        metricValue(snapshot.restingHeartRate.toDouble()),
+        "bpm",
+        FitColors.Coral,
+        onClick = { onDetail(Detail.RESTING_HEART_RATE) },
+    )
+}
+
+@Composable
+private fun HrvDetail(snapshot: HealthSnapshot) {
+    HealthMetricDetail(
+        label = "Heart rate variability",
+        value = snapshot.hrv,
+        unit = "ms",
+        points = snapshot.hrvTrend,
+        color = FitColors.Green,
+    )
+}
+
+@Composable
+private fun RestingHeartRateDetail(snapshot: HealthSnapshot) {
+    HealthMetricDetail(
+        label = "Resting heart rate",
+        value = snapshot.restingHeartRate.toDouble(),
+        unit = "bpm",
+        points = snapshot.restingHeartRateTrend,
+        color = FitColors.Coral,
+    )
+}
+
+@Composable
+private fun HealthMetricDetail(
+    label: String,
+    value: Double,
+    unit: String,
+    points: List<DayPoint>,
+    color: Color,
+) {
+    val readings = points.filter { it.value > 0f }
+    val values = readings.map { it.value.toDouble() }.ifEmpty {
+        listOfNotNull(value.takeIf { it > 0.0 })
+    }
+    val average = values.average()
+
+    Row(Modifier.fillMaxWidth().padding(top = 23.dp), verticalAlignment = Alignment.Bottom) {
+        Text(metricValue(average), color = FitColors.White, style = FitType.Display.copy(fontSize = 56.sp))
+        Spacer(Modifier.width(9.dp))
+        Text("$unit (avg)", color = FitColors.White, fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 9.dp))
+    }
+    if (readings.isNotEmpty()) {
+        val low = readings.minOf { it.value }.toDouble()
+        val high = readings.maxOf { it.value }.toDouble()
+        Text(
+            "Range: ${metricValue(low)}-${metricValue(high)} $unit over the last 7 days",
+            color = FitColors.Muted,
+            style = FitType.Body,
+        )
+    } else {
+        Text("No readings synced yet.", color = FitColors.Muted, style = FitType.Body)
+    }
+    SectionLabel("7 days", color = color)
+    MetricTrendChart(readings, color)
+    if (readings.isNotEmpty()) {
+        SectionLabel("Daily", "$label (avg)", color = color)
+        readings.asReversed().forEachIndexed { index, point ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.Bottom) {
+                Text(
+                    when (index) {
+                        0 -> "Today"
+                        1 -> "Yesterday"
+                        else -> point.label
+                    },
+                    color = FitColors.Muted,
+                    style = FitType.Body,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(metricValue(point.value.toDouble()), color = FitColors.White, style = FitType.Metric.copy(fontSize = 24.sp))
+                Spacer(Modifier.width(5.dp))
+                Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp), modifier = Modifier.padding(bottom = 4.dp))
+            }
+            Rule()
+        }
+    }
+}
+
+private fun metricValue(value: Double): String =
+    if (value > 0.0) value.roundToInt().toString() else "n/a"
+
+@Composable
+private fun MetricTrendChart(points: List<DayPoint>, color: Color) {
+    if (points.isEmpty()) return
+    val values = points.map { it.value }
+    val minValue = values.minOrNull() ?: return
+    val maxValue = values.maxOrNull() ?: return
+    val padding = ((maxValue - minValue) * .18f).coerceAtLeast(1f)
+    val low = minValue - padding
+    val high = maxValue + padding
+    val range = (high - low).coerceAtLeast(1f)
+    val ruleColor = FitColors.Rule
+    val backgroundColor = FitColors.Black
+
+    Row(Modifier.fillMaxWidth().height(165.dp)) {
+        Column(
+            Modifier.width(34.dp).fillMaxHeight().padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(metricValue(high.toDouble()), color = FitColors.Muted, fontSize = 11.sp)
+            Text(metricValue(((high + low) / 2f).toDouble()), color = FitColors.Muted, fontSize = 11.sp)
+            Text(metricValue(low.toDouble()), color = FitColors.Muted, fontSize = 11.sp)
+        }
+        Canvas(Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp)) {
+            for (index in 0..2) {
+                val y = index * size.height / 2f
+                drawLine(ruleColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+            }
+            val path = androidx.compose.ui.graphics.Path()
+            points.forEachIndexed { index, point ->
+                val x = index * size.width / (points.size - 1).coerceAtLeast(1)
+                val y = size.height - ((point.value - low) / range) * size.height
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            points.forEachIndexed { index, point ->
+                val x = index * size.width / (points.size - 1).coerceAtLeast(1)
+                val y = size.height - ((point.value - low) / range) * size.height
+                drawCircle(backgroundColor, 4.dp.toPx(), Offset(x, y))
+                drawCircle(color, 4.dp.toPx(), Offset(x, y), style = Stroke(1.7.dp.toPx()))
+            }
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(start = 34.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        points.forEach { Text(it.label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp)) }
+    }
 }
 
 @Composable

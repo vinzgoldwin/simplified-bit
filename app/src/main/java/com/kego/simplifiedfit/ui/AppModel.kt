@@ -13,6 +13,7 @@ data class HealthSnapshot(
     val steps: Int = 8_426,
     val latestHeartRate: Int = 72,
     val restingHeartRate: Int = 61,
+    val hrv: Double = 98.0,
     val lowHeartRate: Int = 54,
     val highHeartRate: Int = 132,
     val totalCalories: Int = 2_184,
@@ -36,19 +37,29 @@ data class HealthSnapshot(
     val lastSync: String = "8:42",
     val validNights: Int = 7,
     val stepTrend: List<DayPoint> = listOf(
-        DayPoint("F", 6_210f), DayPoint("S", 9_140f), DayPoint("S", 7_860f),
-        DayPoint("M", 10_240f), DayPoint("T", 7_430f), DayPoint("W", 8_920f),
-        DayPoint("T", 8_426f),
+        DayPoint("Friday", 6_210f), DayPoint("Saturday", 9_140f), DayPoint("Sunday", 7_860f),
+        DayPoint("Monday", 10_240f), DayPoint("Tuesday", 7_430f), DayPoint("Wednesday", 8_920f),
+        DayPoint("Thursday", 8_426f),
     ),
     val sleepTrend: List<DayPoint> = listOf(
-        DayPoint("Fri", 78f), DayPoint("Sat", 82f), DayPoint("Sun", 75f),
-        DayPoint("Mon", 86f), DayPoint("Tue", 84f), DayPoint("Wed", 83f),
-        DayPoint("Thu", 82f),
+        DayPoint("Friday", 78f), DayPoint("Saturday", 82f), DayPoint("Sunday", 75f),
+        DayPoint("Monday", 86f), DayPoint("Tuesday", 84f), DayPoint("Wednesday", 83f),
+        DayPoint("Thursday", 82f),
+    ),
+    val hrvTrend: List<DayPoint> = listOf(
+        DayPoint("Friday", 102f), DayPoint("Saturday", 80f), DayPoint("Sunday", 97f),
+        DayPoint("Monday", 98f), DayPoint("Tuesday", 104f), DayPoint("Wednesday", 91f),
+        DayPoint("Thursday", 98f),
+    ),
+    val restingHeartRateTrend: List<DayPoint> = listOf(
+        DayPoint("Friday", 63f), DayPoint("Saturday", 60f), DayPoint("Sunday", 62f),
+        DayPoint("Monday", 61f), DayPoint("Tuesday", 60f), DayPoint("Wednesday", 62f),
+        DayPoint("Thursday", 61f),
     ),
     val calorieTrend: List<DayPoint> = listOf(
-        DayPoint("F", 2_040f), DayPoint("S", 2_380f), DayPoint("S", 2_190f),
-        DayPoint("M", 2_470f), DayPoint("T", 2_060f), DayPoint("W", 2_365f),
-        DayPoint("T", 2_184f),
+        DayPoint("Friday", 2_040f), DayPoint("Saturday", 2_380f), DayPoint("Sunday", 2_190f),
+        DayPoint("Monday", 2_470f), DayPoint("Tuesday", 2_060f), DayPoint("Wednesday", 2_365f),
+        DayPoint("Thursday", 2_184f),
     ),
 ) {
     companion object {
@@ -58,6 +69,7 @@ data class HealthSnapshot(
             steps = 0,
             latestHeartRate = 0,
             restingHeartRate = 0,
+            hrv = 0.0,
             lowHeartRate = 0,
             highHeartRate = 0,
             totalCalories = 0,
@@ -75,6 +87,8 @@ data class HealthSnapshot(
             validNights = 0,
             stepTrend = emptyList(),
             sleepTrend = emptyList(),
+            hrvTrend = emptyList(),
+            restingHeartRateTrend = emptyList(),
             calorieTrend = emptyList(),
         )
     }
@@ -82,4 +96,4 @@ data class HealthSnapshot(
 
 enum class Destination { TODAY, COACH }
 
-enum class Detail { READINESS, SLEEP, STEPS, HEART, CALORIES }
+enum class Detail { READINESS, SLEEP, STEPS, HEART, CALORIES, HRV, RESTING_HEART_RATE }

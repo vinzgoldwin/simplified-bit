@@ -322,14 +322,25 @@ fun SectionLabel(
 }
 
 @Composable
-fun DataRow(label: String, value: String, unit: String = "", color: Color = FitColors.White) {
-    Column {
+fun DataRow(
+    label: String,
+    value: String,
+    unit: String = "",
+    color: Color = FitColors.White,
+    onClick: (() -> Unit)? = null,
+) {
+    val modifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
+    Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.Bottom) {
             Text(label.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
             Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Medium)
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(5.dp))
                 Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp), modifier = Modifier.padding(bottom = 3.dp))
+            }
+            if (onClick != null) {
+                Spacer(Modifier.width(8.dp))
+                Text("›", color = color, fontSize = 24.sp, modifier = Modifier.padding(bottom = 1.dp))
             }
         }
         Rule()
