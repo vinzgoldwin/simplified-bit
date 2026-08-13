@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -45,7 +47,11 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -543,7 +549,15 @@ private fun CaloriesDetail(snapshot: HealthSnapshot) {
 @Composable
 private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestination: (Destination) -> Unit) {
     var input by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val sendMessage = {
+        val message = input.trim()
+        if (message.isNotEmpty()) {
+            onAsk(message)
+            input = ""
+        }
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text("COACH", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 24.sp, letterSpacing = 2.2.sp))
@@ -571,7 +585,7 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
             }
         }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 11.dp),
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = 18.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
@@ -580,6 +594,8 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                 textStyle = FitType.Body.copy(color = FitColors.White),
                 cursorBrush = SolidColor(FitColors.Green),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { sendMessage() }),
                 modifier = Modifier.weight(1f).border(1.dp, FitColors.Rule, RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 13.dp),
                 decorationBox = { inner ->
                     Box {
@@ -589,16 +605,12 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                 },
             )
             Box(Modifier.size(48.dp).clickable {
-                val message = input.trim()
-                if (message.isNotEmpty()) {
-                    onAsk(message)
-                    input = ""
-                }
+                sendMessage()
             }.background(FitColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
                 OutlineIcon(FitIcon.SEND, if (input.isBlank()) FitColors.Muted else FitColors.Green, 23.dp)
             }
         }
-        BottomNav(Destination.COACH, onDestination)
+        if (!imeVisible) BottomNav(Destination.COACH, onDestination)
     }
 }
 
