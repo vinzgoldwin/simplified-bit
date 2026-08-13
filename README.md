@@ -5,8 +5,8 @@ A private Android health dashboard for Fitbit data, with a Mac-hosted Codex coac
 ## What it shows
 
 - Steps
-- Provisional readiness score
-- Provisional sleep score
+- Readiness score
+- Sleep score
 - Latest and resting heart rate
 - Daily total and active calories
 - A focused Codex chat through the Mac companion

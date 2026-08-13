@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -219,7 +220,6 @@ private fun TodayScreen(
                     "Steps",
                     FitColors.Cyan,
                     size = 144.dp,
-                    provisional = false,
                     valueText = snapshot.steps.formatted(),
                 ) { onDetail(Detail.STEPS) }
                 ScoreRing(snapshot.sleepScore, "Sleep", FitColors.Violet, size = 144.dp) { onDetail(Detail.SLEEP) }
@@ -294,7 +294,7 @@ private fun DetailScreen(
 @Composable
 private fun ReadinessDetail(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 27.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp, provisional = false)
+        ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp)
     }
     Text("Readiness combines HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
     SectionLabel("Signals")
@@ -459,7 +459,7 @@ private fun MetricTrendChart(points: List<DayPoint>, color: Color) {
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 34.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        points.forEach { Text(it.label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp)) }
+        points.forEach { Text(it.label.take(1), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp)) }
     }
 }
 
@@ -586,7 +586,7 @@ private fun SleepTrend(points: List<DayPoint>) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             points.forEachIndexed { index, point ->
                 Text(
-                    point.label,
+                    point.label.take(1),
                     color = if (index == points.lastIndex) FitColors.Violet else FitColors.Muted,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -652,7 +652,6 @@ private fun StepsDetail(snapshot: HealthSnapshot) {
             "Steps",
             FitColors.Cyan,
             size = 176.dp,
-            provisional = false,
             valueText = snapshot.steps.formatted(),
         )
     }
@@ -681,7 +680,7 @@ private fun StepsDetail(snapshot: HealthSnapshot) {
 @Composable
 private fun HeartDetail(snapshot: HealthSnapshot) {
     Row(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing(72, "Latest bpm", FitColors.Coral, size = 176.dp, provisional = false)
+        ScoreRing(72, "Latest bpm", FitColors.Coral, size = 176.dp)
     }
     Text("Fitbit sync, not live.", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 12.sp), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
     SectionLabel("Today", "synced 8:42")
@@ -721,7 +720,7 @@ private fun HeartChart() {
 @Composable
 private fun CaloriesDetail(snapshot: HealthSnapshot) {
     Row(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing(73, "Daily total", FitColors.Cyan, size = 176.dp, provisional = false)
+        ScoreRing(73, "Daily total", FitColors.Cyan, size = 176.dp)
     }
     Text("${snapshot.totalCalories.formatted()} KCAL", color = FitColors.White, style = FitType.Metric, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
     SectionLabel("7 days")
@@ -853,9 +852,12 @@ private fun SettingsScreen(
                     }
                 }
                 SetupField("PASTE REDIRECT URL OR CODE", authorizationCode) { authorizationCode = it }
-                SettingsAction("CONNECT GOOGLE HEALTH", FitColors.Green) {
-                    viewModel.connectGoogle(clientId, clientSecret, authorizationCode)
-                }
+                SettingsAction(
+                    label = if (state.syncing) "CONNECTING GOOGLE HEALTH…" else "CONNECT GOOGLE HEALTH",
+                    color = FitColors.Green,
+                    onClick = { viewModel.connectGoogle(clientId, clientSecret, authorizationCode) },
+                    loading = state.syncing,
+                )
             } else {
                 SettingsAction(if (state.syncing) "SYNCING…" else "SYNC NOW", FitColors.Cyan, viewModel::sync)
                 SettingsAction("DISCONNECT", FitColors.Coral, viewModel::disconnectGoogle)
@@ -927,10 +929,20 @@ private fun SetupField(label: String, value: String, onValueChange: (String) -> 
 }
 
 @Composable
-private fun SettingsAction(label: String, color: Color, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SettingsAction(label: String, color: Color, onClick: () -> Unit, loading: Boolean = false) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !loading, onClick = onClick)
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(label, color = color, style = FitType.Eyebrow, modifier = Modifier.weight(1f))
-        Text("›", color = color, fontSize = 24.sp)
+        if (loading) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = color, strokeWidth = 2.dp)
+        } else {
+            Text("›", color = color, fontSize = 24.sp)
+        }
     }
     Rule()
 }

@@ -43,7 +43,6 @@ fun ScoreRing(
     label: String,
     color: Color,
     size: Dp = 154.dp,
-    provisional: Boolean = true,
     valueText: String = value.toString(),
     onClick: (() -> Unit)? = null,
 ) {
@@ -80,9 +79,6 @@ fun ScoreRing(
                 color = FitColors.White,
                 style = FitType.Display.copy(fontSize = if (valueText.length > 3) 34.sp else if (size < 140.dp) 43.sp else 50.sp),
             )
-            if (provisional) {
-                Text("PROVISIONAL", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = 1.sp))
-            }
         }
     }
 }
@@ -375,7 +371,7 @@ fun SevenDayLine(points: List<DayPoint>, color: Color, target: Float? = null) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            points.forEach { Text(it.label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp), textAlign = TextAlign.Center) }
+            points.forEach { Text(it.label.take(1), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp), textAlign = TextAlign.Center) }
         }
     }
 }
@@ -395,7 +391,7 @@ fun SevenDayBars(points: List<DayPoint>, color: Color) {
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            points.forEach { Text(it.label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp)) }
+            points.forEach { Text(it.label.take(1), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp)) }
         }
     }
 }

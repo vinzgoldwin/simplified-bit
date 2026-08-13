@@ -6,7 +6,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.kego.simplifiedfit.BuildConfig
 import com.kego.simplifiedfit.SimplifiedFitApplication
 import com.kego.simplifiedfit.data.CoachClient
 import com.kego.simplifiedfit.data.CoachConnection
@@ -40,7 +39,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as SimplifiedFitApplication
     var state by mutableStateOf(
         AppUiState(
-            snapshot = if (BuildConfig.DEBUG) HealthSnapshot() else HealthSnapshot.empty(),
+            snapshot = HealthSnapshot.empty(),
             googleConnected = app.secureStore.googleCredentials() != null,
             coachConnected = app.secureStore.coachConnection()?.let { CoachClient(it).isHealthy() } == true,
         ),
