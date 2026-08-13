@@ -17,6 +17,7 @@ data class DailyHealth(
     val asleepMinutes: Int? = null,
     val inBedMinutes: Int? = null,
     val awakeMinutes: Int? = null,
+    val restlessnessMinutes: Int? = null,
     val remMinutes: Int? = null,
     val lightMinutes: Int? = null,
     val deepMinutes: Int? = null,
@@ -25,7 +26,7 @@ data class DailyHealth(
     val readinessScore: Int? = null,
 )
 
-class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 1) {
+class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -40,6 +41,7 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
                 asleep_minutes INTEGER,
                 in_bed_minutes INTEGER,
                 awake_minutes INTEGER,
+                restlessness_minutes INTEGER,
                 rem_minutes INTEGER,
                 light_minutes INTEGER,
                 deep_minutes INTEGER,
@@ -52,7 +54,9 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
         )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE daily_health ADD COLUMN restlessness_minutes INTEGER")
+    }
 
     fun upsert(day: DailyHealth) {
         writableDatabase.insertWithOnConflict(
@@ -89,6 +93,7 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
                         asleepMinutes = int("asleep_minutes"),
                         inBedMinutes = int("in_bed_minutes"),
                         awakeMinutes = int("awake_minutes"),
+                        restlessnessMinutes = int("restlessness_minutes"),
                         remMinutes = int("rem_minutes"),
                         lightMinutes = int("light_minutes"),
                         deepMinutes = int("deep_minutes"),
@@ -112,6 +117,7 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
         put("asleep_minutes", asleepMinutes)
         put("in_bed_minutes", inBedMinutes)
         put("awake_minutes", awakeMinutes)
+        put("restlessness_minutes", restlessnessMinutes)
         put("rem_minutes", remMinutes)
         put("light_minutes", lightMinutes)
         put("deep_minutes", deepMinutes)

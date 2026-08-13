@@ -2,6 +2,7 @@ package com.kego.simplifiedfit.domain
 
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 data class SleepSignals(
     val asleepMinutes: Int,
@@ -9,16 +10,16 @@ data class SleepSignals(
     val inBedMinutes: Int,
     val remMinutes: Int? = null,
     val deepMinutes: Int? = null,
-    val midpointDeviationMinutes: Int? = null,
     val awakeMinutes: Int? = null,
+    val restlessnessMinutes: Int? = null,
 )
 
 data class SleepScoreBreakdown(
     val duration: Int = 0,
     val continuity: Int = 0,
+    val restlessness: Int? = null,
     val rem: Int? = null,
     val deep: Int? = null,
-    val consistency: Int? = null,
     val total: Int = 0,
 )
 
@@ -46,26 +47,24 @@ object ScoreCalculator {
         val efficiency = ratio(signals.asleepMinutes.toDouble(), inBed.toDouble())
         val awakeQuality = (1.0 - awakeMinutes / 60.0).coerceIn(0.0, 1.0)
         val continuity = (efficiency * .60 + awakeQuality * .40).coerceIn(0.0, 1.0)
+        val restlessness = signals.restlessnessMinutes?.let { restlessnessScore(it) }
         val rem = signals.remMinutes?.let { stageScore(it, signals.asleepMinutes, .20, .30) }
         val deep = signals.deepMinutes?.let { stageScore(it, signals.asleepMinutes, .13, .23) }
-        val consistency = signals.midpointDeviationMinutes?.let {
-            (1.0 - abs(it) / 120.0).coerceIn(0.0, 1.0)
-        }
 
         val values = buildList {
-            add(duration to .45)
-            add(continuity to .25)
+            add(duration to .40)
+            add(continuity to .20)
+            restlessness?.let { add(it to .20) }
             rem?.let { add(it to .10) }
             deep?.let { add(it to .10) }
-            consistency?.let { add(it to .10) }
         }
 
         return SleepScoreBreakdown(
             duration = points(duration),
             continuity = points(continuity),
+            restlessness = restlessness?.let(::points),
             rem = rem?.let(::points),
             deep = deep?.let(::points),
-            consistency = consistency?.let(::points),
             total = weighted(values),
         )
     }
@@ -75,8 +74,8 @@ object ScoreCalculator {
             listOfNotNull(signals.sleepScore)
         }
         val values = listOfNotNull(
-            percentile(signals.hrv, signals.hrvBaseline)?.let { it to 1.0 },
-            percentile(signals.restingHeartRate, signals.restingHeartRateBaseline)?.let { (1.0 - it) to 1.0 },
+            baselineScore(signals.hrv, signals.hrvBaseline, higherIsBetter = true)?.let { it to 1.0 },
+            baselineScore(signals.restingHeartRate, signals.restingHeartRateBaseline, higherIsBetter = false)?.let { it to 1.0 },
             sleepScores.takeIf { it.isNotEmpty() }?.let { scores ->
                 (scores.map { it.coerceIn(0, 100) }.average() / 100.0) to 1.0
             },
@@ -86,13 +85,10 @@ object ScoreCalculator {
         return (values.sumOf { it.first * it.second } / totalWeight * 100).roundToInt().coerceIn(0, 100)
     }
 
-    fun midpointDeviation(current: Int?, baseline: List<Int>): Int? {
-        current ?: return null
-        if (baseline.isEmpty()) return 0
-        return circularMinuteDistance(current, circularMean(baseline))
-    }
-
     private fun ratio(value: Double, target: Double): Double = (value / target).coerceIn(0.0, 1.0)
+
+    private fun restlessnessScore(minutes: Int): Double =
+        (1.0 - minutes.coerceAtLeast(0) / RESTLESSNESS_LIMIT_MINUTES).coerceIn(0.0, 1.0)
 
     private fun stageScore(minutes: Int, totalMinutes: Int, lower: Double, upper: Double): Double {
         val share = minutes.coerceAtLeast(0).toDouble() / totalMinutes.coerceAtLeast(1)
@@ -103,11 +99,14 @@ object ScoreCalculator {
         }
     }
 
-    private fun percentile(value: Double?, baseline: List<Double>): Double? {
+    private fun baselineScore(value: Double?, baseline: List<Double>, higherIsBetter: Boolean): Double? {
         if (value == null || baseline.isEmpty()) return null
-        val lower = baseline.count { it < value }
-        val equal = baseline.count { it == value }
-        return (lower + equal / 2.0) / baseline.size
+        val mean = baseline.average()
+        val standardDeviation = sqrt(baseline.map { (it - mean) * (it - mean) }.average())
+        val spread = standardDeviation.coerceAtLeast(maxOf(abs(mean) * MINIMUM_BASELINE_SPREAD, 1.0))
+        val direction = if (higherIsBetter) 1.0 else -1.0
+        val deviation = (value - mean) / spread * direction
+        return (BASELINE_SCORE + deviation * POINTS_PER_STANDARD_DEVIATION).coerceIn(0.0, 1.0)
     }
 
     private fun points(value: Double): Int = (value * 100).roundToInt().coerceIn(0, 100)
@@ -118,19 +117,8 @@ object ScoreCalculator {
         return (values.sumOf { it.first * it.second } / totalWeight * 100).roundToInt().coerceIn(0, 100)
     }
 
-    private fun circularMean(values: List<Int>): Int {
-        val reference = values.first()
-        val unwrapped = values.map { reference + signedMinuteDistance(reference, it) }
-        return normalizeMinute(unwrapped.average().roundToInt())
-    }
-
-    private fun circularMinuteDistance(a: Int, b: Int): Int {
-        val distance = abs(normalizeMinute(a) - normalizeMinute(b))
-        return minOf(distance, 1_440 - distance)
-    }
-
-    private fun signedMinuteDistance(from: Int, to: Int): Int =
-        (normalizeMinute(to) - normalizeMinute(from) + 720) % 1_440 - 720
-
-    private fun normalizeMinute(value: Int): Int = ((value % 1_440) + 1_440) % 1_440
+    private const val RESTLESSNESS_LIMIT_MINUTES = 22.0
+    private const val BASELINE_SCORE = .50
+    private const val POINTS_PER_STANDARD_DEVIATION = .13
+    private const val MINIMUM_BASELINE_SPREAD = .05
 }

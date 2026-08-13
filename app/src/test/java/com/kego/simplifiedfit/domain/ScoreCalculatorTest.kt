@@ -11,11 +11,11 @@ class ScoreCalculatorTest {
             SleepSignals(
                 asleepMinutes = 480,
                 targetMinutes = 480,
-                inBedMinutes = 500,
+                inBedMinutes = 490,
                 remMinutes = 110,
                 deepMinutes = 110,
-                midpointDeviationMinutes = 10,
-                awakeMinutes = 20,
+                awakeMinutes = 10,
+                restlessnessMinutes = 4,
             ),
         )
         assertTrue(score in 94..100)
@@ -30,8 +30,8 @@ class ScoreCalculatorTest {
                 inBedMinutes = 486,
                 remMinutes = 120,
                 deepMinutes = 90,
-                midpointDeviationMinutes = 5,
                 awakeMinutes = 6,
+                restlessnessMinutes = 4,
             ),
         )
         val fragmented = ScoreCalculator.sleep(
@@ -41,8 +41,8 @@ class ScoreCalculatorTest {
                 inBedMinutes = 540,
                 remMinutes = 60,
                 deepMinutes = 30,
-                midpointDeviationMinutes = 90,
                 awakeMinutes = 60,
+                restlessnessMinutes = 30,
             ),
         )
 
@@ -63,13 +63,26 @@ class ScoreCalculatorTest {
 
         assertEquals(null, breakdown.rem)
         assertEquals(null, breakdown.deep)
-        assertEquals(null, breakdown.consistency)
+        assertEquals(null, breakdown.restlessness)
         assertTrue(breakdown.total >= 90)
     }
 
     @Test
-    fun `midpoint consistency handles nights around midnight`() {
-        assertTrue(ScoreCalculator.midpointDeviation(5, listOf(1_430, 1_420))!! <= 20)
+    fun `reference sleep card scores 88`() {
+        val breakdown = ScoreCalculator.sleepBreakdown(
+            SleepSignals(
+                asleepMinutes = 499,
+                targetMinutes = 480,
+                inBedMinutes = 505,
+                remMinutes = 121,
+                deepMinutes = 97,
+                awakeMinutes = 6,
+                restlessnessMinutes = 12,
+            ),
+        )
+
+        assertEquals(88, breakdown.total)
+        assertEquals(45, breakdown.restlessness)
     }
 
     @Test
@@ -129,5 +142,20 @@ class ScoreCalculatorTest {
         )
 
         assertEquals(63, score)
+    }
+
+    @Test
+    fun `reference Google Health comparison stays within three points`() {
+        val score = ScoreCalculator.readiness(
+            ReadinessSignals(
+                hrv = 97.55,
+                hrvBaseline = listOf(105.7, 86.9, 83.7, 98.2, 79.4, 94.199, 95.1, 100.25, 89.449),
+                restingHeartRate = 55.0,
+                restingHeartRateBaseline = listOf(53.0, 54.0, 56.0, 55.0, 55.0, 55.0, 55.0, 55.0, 56.0),
+                recentSleepScores = listOf(91, 79, 86, 87, 83, 83, 88),
+            ),
+        )
+
+        assertEquals(64, score)
     }
 }

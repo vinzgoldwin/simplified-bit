@@ -20,6 +20,7 @@ data class SleepRecord(
     val asleepMinutes: Int,
     val inBedMinutes: Int,
     val awakeMinutes: Int,
+    val restlessnessMinutes: Int?,
     val remMinutes: Int?,
     val lightMinutes: Int?,
     val deepMinutes: Int?,
@@ -135,6 +136,11 @@ class GoogleHealthClient(
         val stages = summary.optJSONArray("stagesSummary").orEmpty().associate { stage ->
             stage.optString("type") to stage.optInt("minutes")
         }
+        val restlessnessMinutes = summary.optIntOrNull("minutesRestless")
+            ?: summary.optIntOrNull("restlessnessMinutes")
+            ?: stages["RESTLESS"]
+            ?: stageMinutes(sleep.optJSONArray("stages"), "RESTLESS")
+            ?: stageMinutes(sleep.optJSONArray("shortAwakenings"))
         val localEnd = end.atZone(zoneId)
         val midpoint = start.plusMillis(Duration.between(start, end).toMillis() / 2).atZone(zoneId)
         return SleepRecord(
@@ -142,6 +148,7 @@ class GoogleHealthClient(
             asleepMinutes = summary.optInt("minutesAsleep"),
             inBedMinutes = summary.optInt("minutesInSleepPeriod"),
             awakeMinutes = summary.optInt("minutesAwake"),
+            restlessnessMinutes = restlessnessMinutes,
             remMinutes = stages["REM"],
             lightMinutes = stages["LIGHT"] ?: stages["ASLEEP"],
             deepMinutes = stages["DEEP"],
@@ -188,6 +195,23 @@ class GoogleHealthClient(
         .put("time", JSONObject())
 
     private fun JSONObject.toLocalDate() = LocalDate.of(getInt("year"), getInt("month"), getInt("day"))
+
+    private fun JSONObject.optIntOrNull(name: String): Int? =
+        if (has(name) && !isNull(name)) optInt(name) else null
+
+    private fun stageMinutes(segments: JSONArray?, type: String? = null): Int? {
+        val matching = segments.orEmpty().filter { type == null || it.optString("type") == type }
+        if (matching.isEmpty()) return null
+        val millis = matching.mapNotNull { segment ->
+            runCatching {
+                Duration.between(
+                    Instant.parse(segment.getString("startTime")),
+                    Instant.parse(segment.getString("endTime")),
+                ).toMillis()
+            }.getOrNull()
+        }.sum()
+        return (millis / 60_000.0).toInt()
+    }
 
     private fun JSONArray?.orEmpty(): List<JSONObject> = buildList {
         if (this@orEmpty != null) for (index in 0 until length()) add(getJSONObject(index))

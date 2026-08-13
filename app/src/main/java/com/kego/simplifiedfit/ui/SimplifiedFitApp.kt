@@ -346,6 +346,12 @@ private fun SleepDuration(snapshot: HealthSnapshot) {
             Text("asleep", color = FitColors.Muted, fontSize = 16.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
         Text("${targetHours}h target", color = FitColors.Muted, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))
+        Text(
+            "${snapshot.awakeMinutes}m awake  ·  ${snapshot.restlessnessMinutes}m restless",
+            color = FitColors.Muted,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 
@@ -415,9 +421,9 @@ private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
     val items = listOfNotNull(
         SleepBreakdownItem("Duration", breakdown.duration, FitIcon.CLOCK),
         SleepBreakdownItem("Restfulness", breakdown.continuity, FitIcon.WAVES),
+        breakdown.restlessness?.let { SleepBreakdownItem("Restlessness", it, FitIcon.WAVES) },
         breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.LOTUS) },
         breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.LOTUS) },
-        breakdown.consistency?.let { SleepBreakdownItem("Consistency", it, FitIcon.CALENDAR) },
     )
     if (items.isEmpty()) {
         Text("Not enough sleep data to calculate a breakdown.", color = FitColors.Muted, style = FitType.Body)

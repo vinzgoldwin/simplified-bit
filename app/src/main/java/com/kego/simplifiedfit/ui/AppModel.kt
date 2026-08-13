@@ -9,7 +9,7 @@ data class DayPoint(
 
 data class HealthSnapshot(
     val readiness: Int = 78,
-    val sleepScore: Int = 91,
+    val sleepScore: Int = 82,
     val steps: Int = 8_426,
     val latestHeartRate: Int = 72,
     val restingHeartRate: Int = 61,
@@ -21,16 +21,17 @@ data class HealthSnapshot(
     val sleepMinutes: Int = 462,
     val sleepTargetMinutes: Int = 480,
     val awakeMinutes: Int = 34,
+    val restlessnessMinutes: Int = 12,
     val remMinutes: Int = 132,
     val lightMinutes: Int = 242,
     val deepMinutes: Int = 88,
     val sleepBreakdown: SleepScoreBreakdown = SleepScoreBreakdown(
         duration = 96,
         continuity = 73,
+        restlessness = 45,
         rem = 100,
         deep = 100,
-        consistency = 100,
-        total = 91,
+        total = 82,
     ),
     val lastSync: String = "8:42",
     val validNights: Int = 7,
@@ -42,7 +43,7 @@ data class HealthSnapshot(
     val sleepTrend: List<DayPoint> = listOf(
         DayPoint("Fri", 78f), DayPoint("Sat", 82f), DayPoint("Sun", 75f),
         DayPoint("Mon", 86f), DayPoint("Tue", 84f), DayPoint("Wed", 83f),
-        DayPoint("Thu", 91f),
+        DayPoint("Thu", 82f),
     ),
     val calorieTrend: List<DayPoint> = listOf(
         DayPoint("F", 2_040f), DayPoint("S", 2_380f), DayPoint("S", 2_190f),
@@ -65,6 +66,7 @@ data class HealthSnapshot(
             sleepMinutes = 0,
             sleepTargetMinutes = 480,
             awakeMinutes = 0,
+            restlessnessMinutes = 0,
             remMinutes = 0,
             lightMinutes = 0,
             deepMinutes = 0,

@@ -153,10 +153,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         fun sleepBreakdown(day: DailyHealth): SleepScoreBreakdown? {
             val asleep = day.asleepMinutes ?: return null
             val inBed = day.inBedMinutes ?: return null
-            val baseline = filter { it.date.isBefore(day.date) }
-                .sortedBy { it.date }
-                .mapNotNull { it.sleepMidpointMinute }
-                .takeLast(28)
             return ScoreCalculator.sleepBreakdown(
                 SleepSignals(
                     asleepMinutes = asleep,
@@ -164,8 +160,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     inBedMinutes = inBed,
                     remMinutes = day.remMinutes,
                     deepMinutes = day.deepMinutes,
-                    midpointDeviationMinutes = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, baseline),
                     awakeMinutes = day.awakeMinutes,
+                    restlessnessMinutes = day.restlessnessMinutes,
                 ),
             )
         }
@@ -194,6 +190,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             sleepMinutes = current.asleepMinutes ?: 0,
             sleepTargetMinutes = 480,
             awakeMinutes = current.awakeMinutes ?: 0,
+            restlessnessMinutes = current.restlessnessMinutes ?: 0,
             remMinutes = current.remMinutes ?: 0,
             lightMinutes = current.lightMinutes ?: 0,
             deepMinutes = current.deepMinutes ?: 0,

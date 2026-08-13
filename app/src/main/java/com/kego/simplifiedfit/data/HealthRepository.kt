@@ -39,6 +39,7 @@ class HealthRepository(
                 asleepMinutes = sleep?.asleepMinutes ?: old?.asleepMinutes,
                 inBedMinutes = sleep?.inBedMinutes ?: old?.inBedMinutes,
                 awakeMinutes = sleep?.awakeMinutes ?: old?.awakeMinutes,
+                restlessnessMinutes = sleep?.restlessnessMinutes ?: old?.restlessnessMinutes,
                 remMinutes = sleep?.remMinutes ?: old?.remMinutes,
                 lightMinutes = sleep?.lightMinutes ?: old?.lightMinutes,
                 deepMinutes = sleep?.deepMinutes ?: old?.deepMinutes,
@@ -70,7 +71,6 @@ class HealthRepository(
     private fun calculateSleepScore(day: DailyHealth, earlier: List<DailyHealth>): Int? {
         val asleep = day.asleepMinutes ?: return null
         val inBed = day.inBedMinutes ?: return null
-        val midpoints = baseline(earlier, day.date) { it.sleepMidpointMinute }
         return ScoreCalculator.sleep(
             SleepSignals(
                 asleepMinutes = asleep,
@@ -78,8 +78,8 @@ class HealthRepository(
                 inBedMinutes = inBed,
                 remMinutes = day.remMinutes,
                 deepMinutes = day.deepMinutes,
-                midpointDeviationMinutes = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, midpoints),
                 awakeMinutes = day.awakeMinutes,
+                restlessnessMinutes = day.restlessnessMinutes,
             ),
         )
     }

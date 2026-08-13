@@ -59,18 +59,19 @@ The companion invokes the already-authenticated local Codex CLI with a read-only
 
 Sleep score:
 
-- Duration: 45%
-- Restfulness: 25% (sleep efficiency and awake time)
+- Duration: 40%
+- Restfulness: 20% (sleep efficiency and awake time)
+- Restlessness: 20%
 - REM stage balance: 10%
 - Deep stage balance: 10%
-- Midpoint consistency: 10%
 
 Readiness score:
 
-- HRV compared with the previous 28 days
+- HRV compared with the previous 28 days using personal baseline deviation
 - Average sleep score across the past 7 valid nights
-- Inverse resting heart-rate comparison with the previous 28 days
+- Resting heart rate compared with the previous 28 days using inverse personal baseline deviation
+- Physiological signals are centered at 50 and move 13 points per baseline standard deviation
 - The three available signals are equally weighted and missing signals are reweighted
 - Prior-day activity is intentionally excluded, matching Google's current readiness model
 
-REM, deep-stage, and midpoint signals are reweighted when unavailable instead of treated as zero. Stage scores are strongest inside typical sleep-stage ranges, rather than rewarding more stage minutes without limit. These are wellness indicators, not medical scores.
+Restlessness, REM, and deep-stage signals are reweighted when unavailable instead of treated as zero. Restlessness is capped at 22 minutes for scoring, calibrated so the reference night with 12 restless minutes scores 88. Stage scores are strongest inside typical sleep-stage ranges, rather than rewarding more stage minutes without limit. These are wellness indicators, not medical scores.
