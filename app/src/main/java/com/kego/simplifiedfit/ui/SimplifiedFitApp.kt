@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -281,7 +282,7 @@ private fun SleepDetail(snapshot: HealthSnapshot) {
     Spacer(Modifier.height(42.dp))
     Rule()
     SectionLabel("Sleep score breakdown", color = FitColors.Violet, topPadding = 16.dp, bottomPadding = 8.dp)
-    SleepBreakdown()
+    SleepBreakdown(snapshot.sleepBreakdown)
 }
 
 @Composable
@@ -396,13 +397,18 @@ private fun SleepTrend(points: List<DayPoint>) {
 private data class SleepBreakdownItem(val label: String, val value: Int, val icon: FitIcon)
 
 @Composable
-private fun SleepBreakdown() {
-    val items = listOf(
-        SleepBreakdownItem("Duration", 88, FitIcon.CLOCK),
-        SleepBreakdownItem("Efficiency", 91, FitIcon.WAVES),
-        SleepBreakdownItem("Restorative", 79, FitIcon.LOTUS),
-        SleepBreakdownItem("Consistency", 76, FitIcon.CALENDAR),
+private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
+    val items = listOfNotNull(
+        SleepBreakdownItem("Duration", breakdown.duration, FitIcon.CLOCK),
+        SleepBreakdownItem("Restfulness", breakdown.continuity, FitIcon.WAVES),
+        breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.LOTUS) },
+        breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.LOTUS) },
+        breakdown.consistency?.let { SleepBreakdownItem("Consistency", it, FitIcon.CALENDAR) },
     )
+    if (items.isEmpty()) {
+        Text("Not enough sleep data to calculate a breakdown.", color = FitColors.Muted, style = FitType.Body)
+        return
+    }
     items.forEach { item ->
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlineIcon(item.icon, FitColors.Violet, 25.dp)

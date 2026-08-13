@@ -4,7 +4,6 @@ import com.kego.simplifiedfit.domain.ReadinessSignals
 import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepSignals
 import java.time.LocalDate
-import kotlin.math.abs
 
 class HealthRepository(
     private val database: HealthDatabase,
@@ -54,18 +53,17 @@ class HealthRepository(
 
     private fun score(day: DailyHealth, earlier: List<DailyHealth>): DailyHealth {
         val midpoints = earlier.mapNotNull { it.sleepMidpointMinute }.takeLast(28)
-        val midpointDeviation = day.sleepMidpointMinute?.let { current ->
-            if (midpoints.isEmpty()) 0 else circularMinuteDistance(current, midpoints.average().toInt())
-        } ?: 120
+        val midpointDeviation = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, midpoints)
         val sleepScore = if (day.asleepMinutes != null && day.inBedMinutes != null) {
             ScoreCalculator.sleep(
                 SleepSignals(
                     asleepMinutes = day.asleepMinutes,
                     targetMinutes = 480,
                     inBedMinutes = day.inBedMinutes,
-                    remMinutes = day.remMinutes ?: 0,
-                    deepMinutes = day.deepMinutes ?: 0,
+                    remMinutes = day.remMinutes,
+                    deepMinutes = day.deepMinutes,
                     midpointDeviationMinutes = midpointDeviation,
+                    awakeMinutes = day.awakeMinutes,
                 ),
             )
         } else null
@@ -81,10 +79,5 @@ class HealthRepository(
             ),
         ).takeIf { it > 0 }
         return day.copy(sleepScore = sleepScore, readinessScore = readiness)
-    }
-
-    private fun circularMinuteDistance(a: Int, b: Int): Int {
-        val distance = abs(a - b)
-        return minOf(distance, 1_440 - distance)
     }
 }

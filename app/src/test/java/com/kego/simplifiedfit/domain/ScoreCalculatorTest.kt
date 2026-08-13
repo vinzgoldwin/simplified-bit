@@ -15,9 +15,61 @@ class ScoreCalculatorTest {
                 remMinutes = 110,
                 deepMinutes = 110,
                 midpointDeviationMinutes = 10,
+                awakeMinutes = 20,
             ),
         )
         assertTrue(score in 94..100)
+    }
+
+    @Test
+    fun `awake time and unbalanced stages lower sleep score`() {
+        val healthy = ScoreCalculator.sleep(
+            SleepSignals(
+                asleepMinutes = 480,
+                targetMinutes = 480,
+                inBedMinutes = 486,
+                remMinutes = 120,
+                deepMinutes = 90,
+                midpointDeviationMinutes = 5,
+                awakeMinutes = 6,
+            ),
+        )
+        val fragmented = ScoreCalculator.sleep(
+            SleepSignals(
+                asleepMinutes = 480,
+                targetMinutes = 480,
+                inBedMinutes = 540,
+                remMinutes = 60,
+                deepMinutes = 30,
+                midpointDeviationMinutes = 90,
+                awakeMinutes = 60,
+            ),
+        )
+
+        assertTrue(healthy > fragmented)
+        assertTrue(fragmented < 80)
+    }
+
+    @Test
+    fun `missing optional sleep signals are reweighted`() {
+        val breakdown = ScoreCalculator.sleepBreakdown(
+            SleepSignals(
+                asleepMinutes = 480,
+                targetMinutes = 480,
+                inBedMinutes = 490,
+                awakeMinutes = 10,
+            ),
+        )
+
+        assertEquals(null, breakdown.rem)
+        assertEquals(null, breakdown.deep)
+        assertEquals(null, breakdown.consistency)
+        assertTrue(breakdown.total >= 90)
+    }
+
+    @Test
+    fun `midpoint consistency handles nights around midnight`() {
+        assertTrue(ScoreCalculator.midpointDeviation(5, listOf(1_430, 1_420))!! <= 20)
     }
 
     @Test

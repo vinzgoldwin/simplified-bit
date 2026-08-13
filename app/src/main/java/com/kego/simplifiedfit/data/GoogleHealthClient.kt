@@ -20,9 +20,9 @@ data class SleepRecord(
     val asleepMinutes: Int,
     val inBedMinutes: Int,
     val awakeMinutes: Int,
-    val remMinutes: Int,
-    val lightMinutes: Int,
-    val deepMinutes: Int,
+    val remMinutes: Int?,
+    val lightMinutes: Int?,
+    val deepMinutes: Int?,
     val midpointMinute: Int,
 )
 
@@ -141,9 +141,9 @@ class GoogleHealthClient(
             asleepMinutes = summary.optInt("minutesAsleep"),
             inBedMinutes = summary.optInt("minutesInSleepPeriod"),
             awakeMinutes = summary.optInt("minutesAwake"),
-            remMinutes = stages["REM"] ?: 0,
-            lightMinutes = stages["LIGHT"] ?: stages["ASLEEP"] ?: 0,
-            deepMinutes = stages["DEEP"] ?: 0,
+            remMinutes = stages["REM"],
+            lightMinutes = stages["LIGHT"] ?: stages["ASLEEP"],
+            deepMinutes = stages["DEEP"],
             midpointMinute = midpoint.hour * 60 + midpoint.minute,
         )
     }

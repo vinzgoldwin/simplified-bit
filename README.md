@@ -60,8 +60,9 @@ The companion invokes the already-authenticated local Codex CLI with a read-only
 Sleep score:
 
 - Duration: 45%
-- Efficiency: 25%
-- Restorative sleep: 20%
+- Restfulness: 25% (sleep efficiency and awake time)
+- REM stage balance: 10%
+- Deep stage balance: 10%
 - Midpoint consistency: 10%
 
 Readiness score:
@@ -71,4 +72,4 @@ Readiness score:
 - Sleep score: 30%
 - Inverse prior-day active-energy percentile: 10%
 
-Missing signals are reweighted instead of treated as zero. These are wellness indicators, not medical scores.
+REM, deep-stage, and midpoint signals are reweighted when unavailable instead of treated as zero. Stage scores are strongest inside typical sleep-stage ranges, rather than rewarding more stage minutes without limit. These are wellness indicators, not medical scores.

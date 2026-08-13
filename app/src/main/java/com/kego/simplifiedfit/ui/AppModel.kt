@@ -1,5 +1,7 @@
 package com.kego.simplifiedfit.ui
 
+import com.kego.simplifiedfit.domain.SleepScoreBreakdown
+
 data class DayPoint(
     val label: String,
     val value: Float,
@@ -7,7 +9,7 @@ data class DayPoint(
 
 data class HealthSnapshot(
     val readiness: Int = 78,
-    val sleepScore: Int = 84,
+    val sleepScore: Int = 91,
     val steps: Int = 8_426,
     val latestHeartRate: Int = 72,
     val restingHeartRate: Int = 61,
@@ -22,6 +24,14 @@ data class HealthSnapshot(
     val remMinutes: Int = 132,
     val lightMinutes: Int = 242,
     val deepMinutes: Int = 88,
+    val sleepBreakdown: SleepScoreBreakdown = SleepScoreBreakdown(
+        duration = 96,
+        continuity = 73,
+        rem = 100,
+        deep = 100,
+        consistency = 100,
+        total = 91,
+    ),
     val lastSync: String = "8:42",
     val validNights: Int = 7,
     val stepTrend: List<DayPoint> = listOf(
@@ -32,7 +42,7 @@ data class HealthSnapshot(
     val sleepTrend: List<DayPoint> = listOf(
         DayPoint("Fri", 78f), DayPoint("Sat", 82f), DayPoint("Sun", 75f),
         DayPoint("Mon", 86f), DayPoint("Tue", 84f), DayPoint("Wed", 83f),
-        DayPoint("Thu", 84f),
+        DayPoint("Thu", 91f),
     ),
     val calorieTrend: List<DayPoint> = listOf(
         DayPoint("F", 2_040f), DayPoint("S", 2_380f), DayPoint("S", 2_190f),
@@ -58,6 +68,7 @@ data class HealthSnapshot(
             remMinutes = 0,
             lightMinutes = 0,
             deepMinutes = 0,
+            sleepBreakdown = SleepScoreBreakdown(),
             lastSync = "Never",
             validNights = 0,
             stepTrend = emptyList(),

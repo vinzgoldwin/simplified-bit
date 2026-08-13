@@ -14,6 +14,9 @@ import com.kego.simplifiedfit.data.DailyHealth
 import com.kego.simplifiedfit.data.GoogleCredentials
 import com.kego.simplifiedfit.data.GoogleHealthClient
 import com.kego.simplifiedfit.data.GoogleSetupCredentials
+import com.kego.simplifiedfit.domain.ScoreCalculator
+import com.kego.simplifiedfit.domain.SleepScoreBreakdown
+import com.kego.simplifiedfit.domain.SleepSignals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -147,6 +150,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val byDate = associateBy { it.date }
         val today = LocalDate.now()
         val current = byDate[today] ?: first()
+        fun sleepBreakdown(day: DailyHealth): SleepScoreBreakdown? {
+            val asleep = day.asleepMinutes ?: return null
+            val inBed = day.inBedMinutes ?: return null
+            val baseline = filter { it.date.isBefore(day.date) }
+                .sortedBy { it.date }
+                .mapNotNull { it.sleepMidpointMinute }
+                .takeLast(28)
+            return ScoreCalculator.sleepBreakdown(
+                SleepSignals(
+                    asleepMinutes = asleep,
+                    targetMinutes = 480,
+                    inBedMinutes = inBed,
+                    remMinutes = day.remMinutes,
+                    deepMinutes = day.deepMinutes,
+                    midpointDeviationMinutes = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, baseline),
+                    awakeMinutes = day.awakeMinutes,
+                ),
+            )
+        }
+        val sleepBreakdowns = associate { day -> day.date to sleepBreakdown(day) }
+        val currentSleepBreakdown = sleepBreakdowns[current.date]
         fun trend(value: (DailyHealth) -> Float?): List<DayPoint> = (6 downTo 0).mapNotNull { offset ->
             val date = today.minusDays(offset.toLong())
             value(byDate[date] ?: return@mapNotNull null)?.let {
@@ -158,7 +182,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val heartValues = mapNotNull { it.latestHeartRate }
         return HealthSnapshot(
             readiness = current.readinessScore ?: 0,
-            sleepScore = current.sleepScore ?: 0,
+            sleepScore = currentSleepBreakdown?.total ?: 0,
             steps = current.steps ?: 0,
             latestHeartRate = current.latestHeartRate ?: current.restingHeartRate?.roundToInt() ?: 0,
             restingHeartRate = current.restingHeartRate?.roundToInt() ?: 0,
@@ -173,10 +197,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             remMinutes = current.remMinutes ?: 0,
             lightMinutes = current.lightMinutes ?: 0,
             deepMinutes = current.deepMinutes ?: 0,
+            sleepBreakdown = currentSleepBreakdown ?: SleepScoreBreakdown(),
             lastSync = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("H:mm")),
             validNights = count { it.asleepMinutes != null },
             stepTrend = trend { it.steps?.toFloat() },
-            sleepTrend = trend { it.sleepScore?.toFloat() },
+            sleepTrend = trend { sleepBreakdowns[it.date]?.total?.toFloat() },
             calorieTrend = trend { it.totalCalories?.toFloat() },
         )
     }
