@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -73,13 +75,18 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().background(FitColors.Black)) {
             MatteTexture()
             when {
-                settings -> SettingsScreen(viewModel = viewModel, state = state, onBack = { settings = false })
+                settings -> SettingsScreen(
+                    viewModel = viewModel,
+                    state = state,
+                    darkTheme = darkTheme,
+                    onToggleTheme = { darkTheme = !darkTheme },
+                    onBack = { settings = false },
+                )
                 detail != null -> DetailScreen(detail!!, snapshot, onBack = { detail = null })
                 destination == Destination.TODAY -> TodayScreen(
                     snapshot = snapshot,
                     onDetail = { detail = it },
-                    darkTheme = darkTheme,
-                    onToggleTheme = { darkTheme = !darkTheme },
+                    onSettings = { settings = true },
                     onDestination = { destination = it },
                 )
                 else -> CoachScreen(state = state, onAsk = viewModel::askCoach, onDestination = { destination = it })
@@ -160,8 +167,7 @@ private fun AppHeader(
 private fun TodayScreen(
     snapshot: HealthSnapshot,
     onDetail: (Detail) -> Unit,
-    darkTheme: Boolean,
-    onToggleTheme: () -> Unit,
+    onSettings: () -> Unit,
     onDestination: (Destination) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -175,8 +181,8 @@ private fun TodayScreen(
                     Text("Synced ${snapshot.lastSync}", color = FitColors.Muted, fontSize = 16.sp)
                 }
             }
-            Box(Modifier.size(48.dp).clickable(onClick = onToggleTheme), contentAlignment = Alignment.TopEnd) {
-                OutlineIcon(if (darkTheme) FitIcon.SUN else FitIcon.MOON, FitColors.White, 26.dp)
+            Box(Modifier.size(48.dp).clickable(onClick = onSettings), contentAlignment = Alignment.TopEnd) {
+                OutlineIcon(FitIcon.SETTINGS, FitColors.White, 26.dp)
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -593,7 +599,13 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
 @Composable private fun SuggestionMark(color: Color) { Canvas(Modifier.size(31.dp)) { drawCircle(color, size.minDimension * .43f, center = Offset(size.width / 2, size.height / 2), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))) } }
 
 @Composable
-private fun SettingsScreen(viewModel: AppViewModel, state: AppUiState, onBack: () -> Unit) {
+private fun SettingsScreen(
+    viewModel: AppViewModel,
+    state: AppUiState,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val savedSetup = remember { viewModel.googleSetupCredentials() }
     var clientId by remember { mutableStateOf(savedSetup?.clientId.orEmpty()) }
@@ -624,6 +636,29 @@ private fun SettingsScreen(viewModel: AppViewModel, state: AppUiState, onBack: (
                 SettingsAction(if (state.syncing) "SYNCING…" else "SYNC NOW", FitColors.Cyan, viewModel::sync)
                 SettingsAction("DISCONNECT", FitColors.Coral, viewModel::disconnectGoogle)
             }
+            SectionLabel("Appearance")
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("THEME", color = FitColors.White, style = FitType.Eyebrow)
+                    Spacer(Modifier.height(6.dp))
+                    Text(if (darkTheme) "Dark" else "Light", color = FitColors.Muted, fontSize = 14.sp)
+                }
+                Switch(
+                    checked = darkTheme,
+                    onCheckedChange = { onToggleTheme() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = FitColors.Black,
+                        checkedTrackColor = FitColors.Green,
+                        uncheckedThumbColor = FitColors.White,
+                        uncheckedTrackColor = FitColors.Track,
+                        uncheckedBorderColor = Color.Transparent,
+                    ),
+                )
+            }
+            Rule()
             SectionLabel("Coach")
             DataRow("Mac companion", if (state.coachConnected) "Connected" else "Not connected", color = if (state.coachConnected) FitColors.Green else FitColors.White)
             DataRow("Network", "Tailscale")

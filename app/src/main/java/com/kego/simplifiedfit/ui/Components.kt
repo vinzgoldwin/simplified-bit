@@ -149,7 +149,7 @@ fun MetricRow(
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, MOON, BACK, SEND, CLOCK, WAVES, LOTUS, CALENDAR }
+enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, BACK, SEND, CLOCK, WAVES, LOTUS, CALENDAR }
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -220,32 +220,6 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                     val a = Math.toRadians(i * 45.0)
                     drawLine(color, Offset((w/2 + kotlin.math.cos(a).toFloat()*w*.34f), (h/2 + kotlin.math.sin(a).toFloat()*h*.34f)), Offset((w/2 + kotlin.math.cos(a).toFloat()*w*.46f), (h/2 + kotlin.math.sin(a).toFloat()*h*.46f)), stroke.width, StrokeCap.Round)
                 }
-            }
-            FitIcon.SUN -> {
-                drawCircle(color, w * .25f, Offset(w / 2, h / 2), style = stroke)
-                repeat(8) { i ->
-                    val angle = Math.toRadians(i * 45.0)
-                    val start = w * .37f
-                    val end = w * .48f
-                    drawLine(
-                        color,
-                        Offset(w / 2 + kotlin.math.cos(angle).toFloat() * start, h / 2 + kotlin.math.sin(angle).toFloat() * start),
-                        Offset(w / 2 + kotlin.math.cos(angle).toFloat() * end, h / 2 + kotlin.math.sin(angle).toFloat() * end),
-                        stroke.width,
-                        StrokeCap.Round,
-                    )
-                }
-            }
-            FitIcon.MOON -> {
-                val p = Path().apply {
-                    moveTo(w * .68f, h * .12f)
-                    cubicTo(w * .50f, h * .18f, w * .39f, h * .34f, w * .39f, h * .52f)
-                    cubicTo(w * .39f, h * .72f, w * .53f, h * .87f, w * .72f, h * .88f)
-                    cubicTo(w * .58f, h * .96f, w * .40f, h * .93f, w * .28f, h * .81f)
-                    cubicTo(w * .05f, h * .58f, w * .12f, h * .25f, w * .36f, h * .12f)
-                    cubicTo(w * .46f, h * .07f, w * .58f, h * .08f, w * .68f, h * .12f)
-                }
-                drawPath(p, color, style = stroke)
             }
             FitIcon.BACK -> {
                 drawLine(color, Offset(w * .72f, h * .14f), Offset(w * .25f, h * .5f), stroke.width, StrokeCap.Round)
