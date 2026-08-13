@@ -11,7 +11,7 @@ A private Android health dashboard for Fitbit data, with a Mac-hosted Codex coac
 - Daily total and active calories
 - A focused Codex chat through the Mac companion
 
-Google Health does not publish Fitbit readiness or sleep scores, so both scores are calculated locally and labeled provisional until 14 valid nights are available.
+Google Health does not publish its exact readiness formula or Fitbit sleep score formula, so both scores are calculated locally. Readiness follows Google's published inputs and requires seven valid sleep nights before a score appears; the personal baseline keeps improving through 30 days.
 
 ## Install the Android app
 
@@ -67,9 +67,10 @@ Sleep score:
 
 Readiness score:
 
-- HRV percentile against the previous 28 days: 35%
-- Inverse resting heart-rate percentile: 25%
-- Sleep score: 30%
-- Inverse prior-day active-energy percentile: 10%
+- HRV compared with the previous 28 days
+- Average sleep score across the past 7 valid nights
+- Inverse resting heart-rate comparison with the previous 28 days
+- The three available signals are equally weighted and missing signals are reweighted
+- Prior-day activity is intentionally excluded, matching Google's current readiness model
 
 REM, deep-stage, and midpoint signals are reweighted when unavailable instead of treated as zero. Stage scores are strongest inside typical sleep-stage ranges, rather than rewarding more stage minutes without limit. These are wellness indicators, not medical scores.

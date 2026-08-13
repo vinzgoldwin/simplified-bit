@@ -199,7 +199,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             deepMinutes = current.deepMinutes ?: 0,
             sleepBreakdown = currentSleepBreakdown ?: SleepScoreBreakdown(),
             lastSync = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("H:mm")),
-            validNights = count { it.asleepMinutes != null },
+            validNights = count { (it.asleepMinutes ?: 0) >= 180 },
             stepTrend = trend { it.steps?.toFloat() },
             sleepTrend = trend { sleepBreakdowns[it.date]?.total?.toFloat() },
             calorieTrend = trend { it.totalCalories?.toFloat() },
@@ -207,7 +207,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun HealthSnapshot.coachContext(): String = """
-        Today: readiness $readiness (provisional if fewer than 14 nights), sleep score $sleepScore,
+        Today: readiness $readiness (provisional while the 30-day baseline develops), sleep score $sleepScore,
         sleep ${sleepMinutes}min of ${sleepTargetMinutes}min target, steps $steps,
         latest heart rate $latestHeartRate bpm, resting heart rate $restingHeartRate bpm,
         total calories $totalCalories kcal, active calories $activeCalories kcal,

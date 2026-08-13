@@ -81,8 +81,6 @@ class ScoreCalculatorTest {
                 restingHeartRate = null,
                 restingHeartRateBaseline = emptyList(),
                 sleepScore = 80,
-                priorActiveCalories = null,
-                activeCaloriesBaseline = emptyList(),
             ),
         )
         assertEquals(80, score)
@@ -97,10 +95,39 @@ class ScoreCalculatorTest {
                 restingHeartRate = 52.0,
                 restingHeartRateBaseline = listOf(52.0, 56.0, 58.0, 60.0, 62.0),
                 sleepScore = 88,
-                priorActiveCalories = 500.0,
-                activeCaloriesBaseline = listOf(400.0, 500.0, 600.0, 700.0),
             ),
         )
         assertTrue(score >= 80)
+    }
+
+    @Test
+    fun `readiness uses the past seven sleep scores`() {
+        val score = ScoreCalculator.readiness(
+            ReadinessSignals(
+                hrv = null,
+                hrvBaseline = emptyList(),
+                restingHeartRate = null,
+                restingHeartRateBaseline = emptyList(),
+                sleepScore = 100,
+                recentSleepScores = listOf(40, 40, 40, 40, 40, 40, 100),
+            ),
+        )
+
+        assertEquals(49, score)
+    }
+
+    @Test
+    fun `readiness gives the three Google Health signals equal weight`() {
+        val score = ScoreCalculator.readiness(
+            ReadinessSignals(
+                hrv = 50.0,
+                hrvBaseline = listOf(50.0),
+                restingHeartRate = 60.0,
+                restingHeartRateBaseline = listOf(60.0),
+                recentSleepScores = listOf(90),
+            ),
+        )
+
+        assertEquals(63, score)
     }
 }

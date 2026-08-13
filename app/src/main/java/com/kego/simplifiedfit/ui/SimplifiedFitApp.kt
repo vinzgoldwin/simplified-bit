@@ -195,7 +195,7 @@ private fun TodayScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).background(FitColors.Green, CircleShape))
                 Spacer(Modifier.width(9.dp))
-                Text("CALIBRATING  ·  ${snapshot.validNights} OF 14 NIGHTS", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+                Text("BASELINE  ·  ${snapshot.validNights} OF 30 NIGHTS", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
             }
         }
         BottomNav(Destination.TODAY, onDestination)
@@ -256,16 +256,15 @@ private fun ReadinessDetail(snapshot: HealthSnapshot) {
     Row(Modifier.fillMaxWidth().padding(vertical = 27.dp), horizontalArrangement = Arrangement.Center) {
         ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp)
     }
-    Text("Your recovery signals are above your current baseline.", color = FitColors.White, style = FitType.Body)
-    Text("Score is provisional while Simplified Fit learns your 28-day baseline.", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 12.sp))
-    SectionLabel("Signals", "weighted")
+    Text("Readiness combines HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
+    Text("Score is provisional while Simplified Fit develops your personal baseline.", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 12.sp))
+    SectionLabel("Signals")
     Rule()
-    DataRow("HRV baseline", "35", "%")
-    DataRow("Resting heart rate", "25", "%")
-    DataRow("Sleep", "30", "%")
-    DataRow("Prior-day activity", "10", "%")
+    DataRow("Heart-rate variability", "Personal", "baseline")
+    DataRow("Past week of sleep", "7", "nights")
+    DataRow("Resting heart rate", "Personal", "baseline")
     SectionLabel("Calibration")
-    Text("${snapshot.validNights} valid nights collected. Readiness becomes calibrated after 14 nights; the baseline keeps improving through day 28.", color = FitColors.Muted, style = FitType.Body)
+    Text("${snapshot.validNights} valid nights collected. Readiness starts after 7 nights; the personal baseline keeps improving through 30 days.", color = FitColors.Muted, style = FitType.Body)
 }
 
 @Composable

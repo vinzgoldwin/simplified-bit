@@ -27,9 +27,8 @@ data class ReadinessSignals(
     val hrvBaseline: List<Double>,
     val restingHeartRate: Double?,
     val restingHeartRateBaseline: List<Double>,
-    val sleepScore: Int?,
-    val priorActiveCalories: Double?,
-    val activeCaloriesBaseline: List<Double>,
+    val sleepScore: Int? = null,
+    val recentSleepScores: List<Int> = emptyList(),
 )
 
 object ScoreCalculator {
@@ -72,11 +71,15 @@ object ScoreCalculator {
     }
 
     fun readiness(signals: ReadinessSignals): Int {
+        val sleepScores = signals.recentSleepScores.takeLast(7).ifEmpty {
+            listOfNotNull(signals.sleepScore)
+        }
         val values = listOfNotNull(
-            percentile(signals.hrv, signals.hrvBaseline)?.let { it to .35 },
-            percentile(signals.restingHeartRate, signals.restingHeartRateBaseline)?.let { (1.0 - it) to .25 },
-            signals.sleepScore?.let { (it.coerceIn(0, 100) / 100.0) to .30 },
-            percentile(signals.priorActiveCalories, signals.activeCaloriesBaseline)?.let { (1.0 - it) to .10 },
+            percentile(signals.hrv, signals.hrvBaseline)?.let { it to 1.0 },
+            percentile(signals.restingHeartRate, signals.restingHeartRateBaseline)?.let { (1.0 - it) to 1.0 },
+            sleepScores.takeIf { it.isNotEmpty() }?.let { scores ->
+                (scores.map { it.coerceIn(0, 100) }.average() / 100.0) to 1.0
+            },
         )
         if (values.isEmpty()) return 0
         val totalWeight = values.sumOf { it.second }
@@ -102,7 +105,9 @@ object ScoreCalculator {
 
     private fun percentile(value: Double?, baseline: List<Double>): Double? {
         if (value == null || baseline.isEmpty()) return null
-        return baseline.count { it <= value }.toDouble() / baseline.size
+        val lower = baseline.count { it < value }
+        val equal = baseline.count { it == value }
+        return (lower + equal / 2.0) / baseline.size
     }
 
     private fun points(value: Double): Int = (value * 100).roundToInt().coerceIn(0, 100)

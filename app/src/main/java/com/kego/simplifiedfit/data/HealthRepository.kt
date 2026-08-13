@@ -52,32 +52,59 @@ class HealthRepository(
     }
 
     private fun score(day: DailyHealth, earlier: List<DailyHealth>): DailyHealth {
-        val midpoints = earlier.mapNotNull { it.sleepMidpointMinute }.takeLast(28)
-        val midpointDeviation = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, midpoints)
-        val sleepScore = if (day.asleepMinutes != null && day.inBedMinutes != null) {
-            ScoreCalculator.sleep(
-                SleepSignals(
-                    asleepMinutes = day.asleepMinutes,
-                    targetMinutes = 480,
-                    inBedMinutes = day.inBedMinutes,
-                    remMinutes = day.remMinutes,
-                    deepMinutes = day.deepMinutes,
-                    midpointDeviationMinutes = midpointDeviation,
-                    awakeMinutes = day.awakeMinutes,
-                ),
-            )
-        } else null
+        val sleepScore = calculateSleepScore(day, earlier)
+        val recentSleepScores = recentSleepScores(day, earlier, sleepScore)
         val readiness = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = day.hrv,
-                hrvBaseline = earlier.mapNotNull { it.hrv }.takeLast(28),
+                hrvBaseline = baseline(earlier, day.date) { it.hrv },
                 restingHeartRate = day.restingHeartRate,
-                restingHeartRateBaseline = earlier.mapNotNull { it.restingHeartRate }.takeLast(28),
+                restingHeartRateBaseline = baseline(earlier, day.date) { it.restingHeartRate },
                 sleepScore = sleepScore,
-                priorActiveCalories = earlier.lastOrNull()?.activeCalories,
-                activeCaloriesBaseline = earlier.mapNotNull { it.activeCalories }.takeLast(28),
+                recentSleepScores = recentSleepScores,
             ),
-        ).takeIf { it > 0 }
+        ).takeIf { recentSleepScores.size >= 7 && it > 0 }
         return day.copy(sleepScore = sleepScore, readinessScore = readiness)
     }
+
+    private fun calculateSleepScore(day: DailyHealth, earlier: List<DailyHealth>): Int? {
+        val asleep = day.asleepMinutes ?: return null
+        val inBed = day.inBedMinutes ?: return null
+        val midpoints = baseline(earlier, day.date) { it.sleepMidpointMinute }
+        return ScoreCalculator.sleep(
+            SleepSignals(
+                asleepMinutes = asleep,
+                targetMinutes = 480,
+                inBedMinutes = inBed,
+                remMinutes = day.remMinutes,
+                deepMinutes = day.deepMinutes,
+                midpointDeviationMinutes = ScoreCalculator.midpointDeviation(day.sleepMidpointMinute, midpoints),
+                awakeMinutes = day.awakeMinutes,
+            ),
+        )
+    }
+
+    private fun recentSleepScores(day: DailyHealth, earlier: List<DailyHealth>, currentScore: Int?): List<Int> {
+        val start = day.date.minusDays(6)
+        val previousScores = earlier
+            .filter { it.date >= start && it.date.isBefore(day.date) }
+            .mapNotNull { previous ->
+                if ((previous.asleepMinutes ?: 0) < 180) return@mapNotNull null
+                calculateSleepScore(previous, earlier.filter { it.date.isBefore(previous.date) })
+            }
+        return previousScores + if ((day.asleepMinutes ?: 0) >= 180 && currentScore != null) {
+            listOf(currentScore)
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun <T> baseline(
+        earlier: List<DailyHealth>,
+        date: LocalDate,
+        value: (DailyHealth) -> T?,
+    ): List<T> = earlier
+        .filter { it.date >= date.minusDays(28) && it.date.isBefore(date) }
+        .mapNotNull(value)
+        .takeLast(28)
 }
