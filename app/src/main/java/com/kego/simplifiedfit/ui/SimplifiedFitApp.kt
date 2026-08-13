@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
@@ -56,7 +57,8 @@ import java.util.Locale
 
 @Composable
 fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
-    SimplifiedFitTheme {
+    var darkTheme by rememberSaveable { mutableStateOf(true) }
+    SimplifiedFitTheme(darkTheme = darkTheme) {
         val state = viewModel.state
         val snapshot = state.snapshot
         var destination by remember { mutableStateOf(Destination.TODAY) }
@@ -76,7 +78,8 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                 destination == Destination.TODAY -> TodayScreen(
                     snapshot = snapshot,
                     onDetail = { detail = it },
-                    onSettings = { settings = true },
+                    darkTheme = darkTheme,
+                    onToggleTheme = { darkTheme = !darkTheme },
                     onDestination = { destination = it },
                 )
                 else -> CoachScreen(state = state, onAsk = viewModel::askCoach, onDestination = { destination = it })
@@ -87,10 +90,12 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
 
 @Composable
 private fun MatteTexture() {
+    val surfaceColor = FitColors.Surface
+    val backgroundColor = FitColors.Black
     Canvas(Modifier.fillMaxSize()) {
         drawRect(
             Brush.radialGradient(
-                colors = listOf(Color(0xFF18191B), Color(0xFF090A0B)),
+                colors = listOf(surfaceColor, backgroundColor),
                 center = Offset(size.width * .28f, size.height * .08f),
                 radius = maxOf(size.width, size.height) * .95f,
             ),
@@ -155,7 +160,8 @@ private fun AppHeader(
 private fun TodayScreen(
     snapshot: HealthSnapshot,
     onDetail: (Detail) -> Unit,
-    onSettings: () -> Unit,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onDestination: (Destination) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -169,8 +175,8 @@ private fun TodayScreen(
                     Text("Synced ${snapshot.lastSync}", color = FitColors.Muted, fontSize = 16.sp)
                 }
             }
-            Box(Modifier.size(48.dp).clickable(onClick = onSettings), contentAlignment = Alignment.TopEnd) {
-                OutlineIcon(FitIcon.SETTINGS, FitColors.White, 26.dp)
+            Box(Modifier.size(48.dp).clickable(onClick = onToggleTheme), contentAlignment = Alignment.TopEnd) {
+                OutlineIcon(if (darkTheme) FitIcon.SUN else FitIcon.MOON, FitColors.White, 26.dp)
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -342,6 +348,9 @@ private fun SleepTrend(points: List<DayPoint>) {
     if (points.isEmpty()) return
     val low = (points.minOfOrNull { it.value } ?: 0f) - 4f
     val high = (points.maxOfOrNull { it.value } ?: 1f) + 4f
+    val ruleColor = FitColors.Rule
+    val violetColor = FitColors.Violet
+    val backgroundColor = FitColors.Black
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             points.forEachIndexed { index, point ->
@@ -364,18 +373,18 @@ private fun SleepTrend(points: List<DayPoint>) {
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             drawLine(
-                FitColors.Rule,
+                ruleColor,
                 Offset(0f, size.height - 1.dp.toPx()),
                 Offset(size.width, size.height - 1.dp.toPx()),
                 1.dp.toPx(),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx())),
             )
-            drawPath(path, FitColors.Violet, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(path, violetColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             points.forEachIndexed { index, point ->
                 val x = index * size.width / (points.size - 1).coerceAtLeast(1)
                 val y = size.height - ((point.value - low) / range) * (size.height - 10.dp.toPx())
-                drawCircle(if (index == points.lastIndex) FitColors.Violet else FitColors.Black, 4.dp.toPx(), Offset(x, y))
-                drawCircle(FitColors.Violet, 4.dp.toPx(), Offset(x, y), style = Stroke(1.5.dp.toPx()))
+                drawCircle(if (index == points.lastIndex) violetColor else backgroundColor, 4.dp.toPx(), Offset(x, y))
+                drawCircle(violetColor, 4.dp.toPx(), Offset(x, y), style = Stroke(1.5.dp.toPx()))
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -482,11 +491,13 @@ private fun HeartDetail(snapshot: HealthSnapshot) {
 @Composable
 private fun HeartChart() {
     val values = listOf(61f, 58f, 57f, 63f, 82f, 112f, 86f, 70f, 68f, 94f, 132f, 89f, 74f, 72f)
+    val ruleColor = FitColors.Rule
+    val coralColor = FitColors.Coral
     Column {
         Canvas(Modifier.fillMaxWidth().height(136.dp)) {
             for (i in 0..3) {
                 val y = i * size.height / 3f
-                drawLine(FitColors.Rule, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                drawLine(ruleColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
             }
             val path = androidx.compose.ui.graphics.Path()
             values.forEachIndexed { i, value ->
@@ -494,7 +505,7 @@ private fun HeartChart() {
                 val y = size.height - ((value - 45f) / 95f) * size.height
                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            drawPath(path, FitColors.Coral, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            drawPath(path, coralColor, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("12A", "6A", "12P", "6P", "NOW").forEach { Text(it, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp)) }
@@ -534,7 +545,7 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("How was my recovery today?", color = FitColors.White, style = FitType.Body, modifier = Modifier.background(Color(0xFF29292B), RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp)) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("How was my recovery today?", color = FitColors.White, style = FitType.Body, modifier = Modifier.background(FitColors.Surface, RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp)) }
             Spacer(Modifier.height(48.dp))
              Text(state.coachReply ?: "Your readiness is 78. Sleep was strong, while heart rate is slightly above your recent baseline. A lighter training day may fit the available data.", color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
@@ -571,7 +582,7 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                     onAsk(message)
                     input = ""
                 }
-            }.background(Color(0xFF29292B), CircleShape), contentAlignment = Alignment.Center) {
+            }.background(FitColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
                 OutlineIcon(FitIcon.SEND, if (input.isBlank()) FitColors.Muted else FitColors.Green, 23.dp)
             }
         }

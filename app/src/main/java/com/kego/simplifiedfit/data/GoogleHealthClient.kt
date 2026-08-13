@@ -94,6 +94,7 @@ class GoogleHealthClient(
     ): Map<LocalDate, Double> {
         val payload = JSONObject()
             .put("range", JSONObject().put("start", civilDate(start)).put("end", civilDate(end)))
+            .put("dataSourceFamily", GOOGLE_WEARABLES)
             .put("windowSizeDays", 1)
         val response = JSONObject(
             request("$API_ROOT/users/me/dataTypes/$dataType/dataPoints:dailyRollUp", "POST", payload.toString(), "application/json", token),
@@ -199,6 +200,7 @@ class GoogleHealthClient(
     companion object {
         private const val API_ROOT = "https://health.googleapis.com/v4"
         private const val TOKEN_URL = "https://oauth2.googleapis.com/token"
+        private const val GOOGLE_WEARABLES = "users/me/dataSourceFamilies/google-wearables"
         const val REDIRECT_URI = "https://www.google.com"
         val SCOPES = listOf(
             "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",

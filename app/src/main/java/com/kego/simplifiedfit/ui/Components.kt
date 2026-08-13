@@ -48,12 +48,13 @@ fun ScoreRing(
     onClick: (() -> Unit)? = null,
 ) {
     val clickModifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
+    val trackColor = FitColors.Track
     Box(clickModifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             val stroke = 9.dp.toPx()
             val pad = stroke / 2f + 2.dp.toPx()
             drawArc(
-                color = FitColors.Track,
+                color = trackColor,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -88,13 +89,15 @@ fun ScoreRing(
 
 @Composable
 fun SleepScoreRing(value: Int, modifier: Modifier = Modifier) {
+    val trackColor = FitColors.Track
+    val violetColor = FitColors.Violet
     Box(modifier.size(176.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             val stroke = 11.dp.toPx()
             val pad = stroke / 2f + 5.dp.toPx()
             val ringSize = Size(size.width - pad * 2, size.height - pad * 2)
             drawArc(
-                color = FitColors.Track,
+                color = trackColor,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -103,7 +106,7 @@ fun SleepScoreRing(value: Int, modifier: Modifier = Modifier) {
                 style = Stroke(stroke),
             )
             drawArc(
-                color = FitColors.Violet,
+                color = violetColor,
                 startAngle = -90f,
                 sweepAngle = value.coerceIn(0, 100) * 3.6f,
                 useCenter = false,
@@ -146,7 +149,7 @@ fun MetricRow(
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, BACK, SEND, CLOCK, WAVES, LOTUS, CALENDAR }
+enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, MOON, BACK, SEND, CLOCK, WAVES, LOTUS, CALENDAR }
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -217,6 +220,32 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                     val a = Math.toRadians(i * 45.0)
                     drawLine(color, Offset((w/2 + kotlin.math.cos(a).toFloat()*w*.34f), (h/2 + kotlin.math.sin(a).toFloat()*h*.34f)), Offset((w/2 + kotlin.math.cos(a).toFloat()*w*.46f), (h/2 + kotlin.math.sin(a).toFloat()*h*.46f)), stroke.width, StrokeCap.Round)
                 }
+            }
+            FitIcon.SUN -> {
+                drawCircle(color, w * .25f, Offset(w / 2, h / 2), style = stroke)
+                repeat(8) { i ->
+                    val angle = Math.toRadians(i * 45.0)
+                    val start = w * .37f
+                    val end = w * .48f
+                    drawLine(
+                        color,
+                        Offset(w / 2 + kotlin.math.cos(angle).toFloat() * start, h / 2 + kotlin.math.sin(angle).toFloat() * start),
+                        Offset(w / 2 + kotlin.math.cos(angle).toFloat() * end, h / 2 + kotlin.math.sin(angle).toFloat() * end),
+                        stroke.width,
+                        StrokeCap.Round,
+                    )
+                }
+            }
+            FitIcon.MOON -> {
+                val p = Path().apply {
+                    moveTo(w * .68f, h * .12f)
+                    cubicTo(w * .50f, h * .18f, w * .39f, h * .34f, w * .39f, h * .52f)
+                    cubicTo(w * .39f, h * .72f, w * .53f, h * .87f, w * .72f, h * .88f)
+                    cubicTo(w * .58f, h * .96f, w * .40f, h * .93f, w * .28f, h * .81f)
+                    cubicTo(w * .05f, h * .58f, w * .12f, h * .25f, w * .36f, h * .12f)
+                    cubicTo(w * .46f, h * .07f, w * .58f, h * .08f, w * .68f, h * .12f)
+                }
+                drawPath(p, color, style = stroke)
             }
             FitIcon.BACK -> {
                 drawLine(color, Offset(w * .72f, h * .14f), Offset(w * .25f, h * .5f), stroke.width, StrokeCap.Round)
@@ -319,11 +348,13 @@ fun SevenDayLine(points: List<DayPoint>, color: Color, target: Float? = null) {
     val values = points.map { it.value }
     val low = (values.minOrNull() ?: 0f) * .9f
     val high = max(values.maxOrNull() ?: 1f, target ?: 0f) * 1.06f
+    val ruleColor = FitColors.Rule
+    val backgroundColor = FitColors.Black
     Column {
         Canvas(Modifier.fillMaxWidth().height(128.dp)) {
             if (target != null) {
                 val y = size.height - ((target - low) / (high - low)) * size.height
-                drawLine(FitColors.Rule, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                drawLine(ruleColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
             }
             val path = Path()
             points.forEachIndexed { index, point ->
@@ -335,7 +366,7 @@ fun SevenDayLine(points: List<DayPoint>, color: Color, target: Float? = null) {
             points.forEachIndexed { index, point ->
                 val x = index * size.width / (points.size - 1).coerceAtLeast(1)
                 val y = size.height - ((point.value - low) / (high - low)) * size.height
-                drawCircle(if (index == points.lastIndex) color else FitColors.Black, 4.dp.toPx(), Offset(x, y))
+                drawCircle(if (index == points.lastIndex) color else backgroundColor, 4.dp.toPx(), Offset(x, y))
                 drawCircle(color, 4.dp.toPx(), Offset(x, y), style = Stroke(1.5.dp.toPx()))
             }
         }
