@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -32,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +50,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -571,9 +575,27 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("How was my recovery today?", color = FitColors.White, style = FitType.Body, modifier = Modifier.background(FitColors.Surface, RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp)) }
-            Spacer(Modifier.height(48.dp))
-             Text(state.coachReply ?: "Your readiness is 78. Sleep was strong, while heart rate is slightly above your recent baseline. A lighter training day may fit the available data.", color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
+            if (state.coachMessage != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Text(
+                        state.coachMessage,
+                        color = FitColors.White,
+                        style = FitType.Body,
+                        modifier = Modifier.background(FitColors.Surface, RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp),
+                    )
+                }
+            }
+            if (state.coachMessage != null) Spacer(Modifier.height(48.dp))
+            when {
+                state.coachBusy -> Text("Thinking...", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 16.sp))
+                state.coachReply != null -> Text(state.coachReply, color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
+                state.coachMessage == null -> Text(
+                    if (state.coachConnected) "Ask a question about your health." else "Pair the Mac companion to start a conversation.",
+                    color = FitColors.Muted,
+                    style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
             listOf("Why is readiness lower?" to FitColors.Green, "How can I sleep better?" to FitColors.Violet, "Compare this week" to FitColors.Cyan).forEach { (suggestion, color) ->
                 Row(Modifier.fillMaxWidth().clickable { input = suggestion }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -586,14 +608,15 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
         }
         Row(
             Modifier.fillMaxWidth().imePadding().padding(horizontal = 18.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
             BasicTextField(
                 value = input,
                 onValueChange = { input = it },
                 textStyle = FitType.Body.copy(color = FitColors.White),
                 cursorBrush = SolidColor(FitColors.Green),
-                singleLine = true,
+                minLines = 1,
+                maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { sendMessage() }),
                 modifier = Modifier.weight(1f).border(1.dp, FitColors.Rule, RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 13.dp),
@@ -630,10 +653,10 @@ private fun SettingsScreen(
     var clientSecret by remember { mutableStateOf(savedSetup?.clientSecret.orEmpty()) }
     var authorizationCode by remember { mutableStateOf("") }
     var pairing by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         AppHeader("Settings", onBack = onBack)
         Rule(Modifier.padding(horizontal = 22.dp))
-        Column(Modifier.padding(horizontal = 22.dp).verticalScroll(rememberScrollState())) {
+        Column(Modifier.padding(horizontal = 22.dp).imePadding().verticalScroll(rememberScrollState())) {
             SectionLabel("Google Health")
             DataRow("Status", if (state.googleConnected) "Connected" else "Not connected", color = if (state.googleConnected) FitColors.Green else FitColors.White)
             DataRow("Sync", "Every 6 hours")
@@ -688,13 +711,19 @@ private fun SettingsScreen(
                 Spacer(Modifier.height(20.dp))
                 Text(it, color = if (it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted, style = FitType.Body)
             }
-            Spacer(Modifier.height(40.dp).navigationBarsPadding())
+            Spacer(Modifier.height(80.dp).navigationBarsPadding())
         }
     }
 }
 
 @Composable
 private fun SetupField(label: String, value: String, onValueChange: (String) -> Unit) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    var focused by remember { mutableStateOf(false) }
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(focused, imeBottom) {
+        if (focused && imeBottom > 0) bringIntoViewRequester.bringIntoView()
+    }
     Column(Modifier.fillMaxWidth().padding(top = 17.dp)) {
         Text(label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
         BasicTextField(
@@ -704,7 +733,11 @@ private fun SetupField(label: String, value: String, onValueChange: (String) -> 
             cursorBrush = SolidColor(FitColors.Green),
             singleLine = true,
             visualTransformation = if (label == "CLIENT SECRET") PasswordVisualTransformation() else VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .onFocusChanged { focused = it.isFocused }
+                .padding(vertical = 12.dp),
         )
         Rule()
     }

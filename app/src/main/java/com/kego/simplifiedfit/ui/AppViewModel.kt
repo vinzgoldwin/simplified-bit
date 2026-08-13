@@ -31,6 +31,7 @@ data class AppUiState(
     val coachConnected: Boolean,
     val syncing: Boolean = false,
     val setupMessage: String? = null,
+    val coachMessage: String? = null,
     val coachReply: String? = null,
     val coachBusy: Boolean = false,
 )
@@ -127,16 +128,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun askCoach(message: String) {
+        val trimmedMessage = message.trim()
+        if (trimmedMessage.isBlank() || state.coachBusy) return
+
         val connection = app.secureStore.coachConnection()
+        state = state.copy(coachMessage = trimmedMessage, coachReply = null, coachBusy = connection != null)
         if (connection == null) {
-            state = state.copy(coachReply = "Pair the Mac companion in Settings first.")
+            state = state.copy(coachBusy = false, coachReply = "Pair the Mac companion in Settings first.")
             return
         }
-        if (message.isBlank() || state.coachBusy) return
         viewModelScope.launch {
             state = state.copy(coachBusy = true, coachReply = null)
             runCatching {
-                withContext(Dispatchers.IO) { CoachClient(connection).ask(message, state.snapshot.coachContext()) }
+                withContext(Dispatchers.IO) { CoachClient(connection).ask(trimmedMessage, state.snapshot.coachContext()) }
             }.onSuccess {
                 state = state.copy(coachBusy = false, coachReply = it, coachConnected = true)
             }.onFailure {
