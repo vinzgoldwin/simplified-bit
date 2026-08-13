@@ -428,18 +428,41 @@ private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
 
 @Composable
 private fun StepsDetail(snapshot: HealthSnapshot) {
+    val averageSteps = snapshot.stepTrend.map { it.value }.average().toInt()
+    val bestDay = snapshot.stepTrend.maxByOrNull { it.value }
+    val progress = (snapshot.steps / 10_000f * 100f).coerceIn(0f, 100f)
+    val remaining = (10_000 - snapshot.steps).coerceAtLeast(0)
+
     Row(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing((snapshot.steps / 100f).toInt(), "Steps", FitColors.Cyan, size = 176.dp, provisional = false)
+        ScoreRing(
+            (snapshot.steps / 100f).toInt(),
+            "Steps",
+            FitColors.Cyan,
+            size = 176.dp,
+            provisional = false,
+            valueText = snapshot.steps.formatted(),
+        )
     }
-    Text("${snapshot.steps.formatted()} STEPS", color = FitColors.White, style = FitType.Metric, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-    Text("10,000 DAILY TARGET", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+    Text(
+        String.format(Locale.US, "%.1f%% OF 10K", progress),
+        color = FitColors.White,
+        style = FitType.Metric.copy(fontSize = 18.sp),
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        "${remaining.formatted()} STEPS REMAINING",
+        color = FitColors.Muted,
+        style = FitType.Eyebrow.copy(fontSize = 9.sp),
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+    )
     SectionLabel("7 days", "10k target")
     SevenDayLine(snapshot.stepTrend, FitColors.Cyan, target = 10_000f)
     SectionLabel("Summary")
     Rule()
-    DataRow("Today", snapshot.steps.formatted(), "steps")
-    DataRow("7-day average", "8,321", "steps")
-    DataRow("Target progress", "84", "%", FitColors.Cyan)
+    DataRow("7-day average", averageSteps.formatted(), "steps")
+    bestDay?.let { DataRow("Best day · ${it.label}", it.value.toInt().formatted(), "steps", FitColors.Cyan) }
 }
 
 @Composable
