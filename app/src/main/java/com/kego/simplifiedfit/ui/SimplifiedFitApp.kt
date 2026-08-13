@@ -270,8 +270,8 @@ private fun DetailScreen(
         Detail.STEPS -> "Steps"
         Detail.HEART -> "Heart"
         Detail.CALORIES -> "Calories"
-        Detail.HRV -> "Heart rate variability"
-        Detail.RESTING_HEART_RATE -> "Resting heart rate"
+        Detail.HRV -> "HRV"
+        Detail.RESTING_HEART_RATE -> "Resting HR"
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         AppHeader(title, "Thu, 13 Aug", onBack = onBack)
@@ -302,7 +302,7 @@ private fun ReadinessDetail(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit
     DataRow(
         "Heart-rate variability",
         metricValue(snapshot.hrv),
-        "ms",
+        "ms · today",
         FitColors.Green,
         onClick = { onDetail(Detail.HRV) },
     )
@@ -353,9 +353,29 @@ private fun HealthMetricDetail(
     val average = values.average()
 
     Row(Modifier.fillMaxWidth().padding(top = 23.dp), verticalAlignment = Alignment.Bottom) {
-        Text(metricValue(average), color = FitColors.White, style = FitType.Display.copy(fontSize = 56.sp))
-        Spacer(Modifier.width(9.dp))
-        Text("$unit (avg)", color = FitColors.White, fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 9.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(metricValue(value), color = FitColors.White, style = FitType.Display.copy(fontSize = 56.sp))
+                Spacer(Modifier.width(9.dp))
+                Text(unit, color = FitColors.White, fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 9.dp))
+            }
+            Text(
+                "TODAY",
+                color = color,
+                style = FitType.Eyebrow.copy(fontSize = 10.sp, letterSpacing = 1.5.sp),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (readings.isNotEmpty()) {
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(bottom = 5.dp)) {
+                Text("7-DAY AVG", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp, letterSpacing = 1.2.sp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(metricValue(average), color = FitColors.Muted, style = FitType.Metric.copy(fontSize = 23.sp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(unit, color = FitColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 2.dp))
+                }
+            }
+        }
     }
     if (readings.isNotEmpty()) {
         val low = readings.minOf { it.value }.toDouble()
