@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
@@ -211,29 +212,36 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                 drawCircle(color, w * .035f, Offset(w * .64f, h * .47f))
             }
             FitIcon.SETTINGS -> {
-                val center = Offset(w / 2f, h / 2f)
-                val gear = Path()
-                repeat(8) { tooth ->
-                    val toothCenter = tooth * 45f
-                    listOf(
-                        -22.5f to .29f,
-                        -17f to .39f,
-                        -9f to .43f,
-                        9f to .43f,
-                        17f to .39f,
-                        22.5f to .29f,
-                    ).forEachIndexed { index, (offset, radius) ->
-                        val angle = Math.toRadians((toothCenter + offset - 90f).toDouble())
-                        val point = Offset(
-                            center.x + kotlin.math.cos(angle).toFloat() * w * radius,
-                            center.y + kotlin.math.sin(angle).toFloat() * h * radius,
-                        )
-                        if (tooth == 0 && index == 0) gear.moveTo(point.x, point.y) else gear.lineTo(point.x, point.y)
-                    }
+                val gear = Path().apply {
+                    moveTo(w * .422f, h * .125f)
+                    lineTo(w * .578f, h * .125f)
+                    lineTo(w * .603f, h * .239f)
+                    cubicTo(w * .678f, h * .276f, w * .753f, h * .319f, w * .775f, h * .344f)
+                    lineTo(w * .881f, h * .294f)
+                    lineTo(w * .959f, h * .430f)
+                    lineTo(w * .875f, h * .502f)
+                    cubicTo(w * .880f, h * .527f, w * .880f, h * .553f, w * .875f, h * .577f)
+                    lineTo(w * .959f, h * .648f)
+                    lineTo(w * .881f, h * .784f)
+                    lineTo(w * .775f, h * .734f)
+                    cubicTo(w * .709f, h * .794f, w * .653f, h * .828f, w * .603f, h * .864f)
+                    lineTo(w * .578f, h * .875f)
+                    lineTo(w * .422f, h * .875f)
+                    lineTo(w * .397f, h * .761f)
+                    cubicTo(w * .322f, h * .724f, w * .247f, h * .681f, w * .225f, h * .656f)
+                    lineTo(w * .119f, h * .706f)
+                    lineTo(w * .041f, h * .570f)
+                    lineTo(w * .125f, h * .498f)
+                    cubicTo(w * .120f, h * .473f, w * .120f, h * .447f, w * .125f, h * .423f)
+                    lineTo(w * .041f, h * .352f)
+                    lineTo(w * .119f, h * .216f)
+                    lineTo(w * .225f, h * .266f)
+                    cubicTo(w * .291f, h * .206f, w * .347f, h * .172f, w * .397f, h * .136f)
+                    close()
                 }
-                gear.close()
-                drawPath(gear, color, style = stroke)
-                drawCircle(color, w * .15f, center, style = stroke)
+                val gearStroke = Stroke(width = stroke.width, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                drawPath(gear, color, style = gearStroke)
+                drawCircle(color, w * .128f, Offset(w / 2f, h / 2f), style = gearStroke)
             }
             FitIcon.BACK -> {
                 drawLine(color, Offset(w * .72f, h * .14f), Offset(w * .25f, h * .5f), stroke.width, StrokeCap.Round)
