@@ -1,6 +1,6 @@
 # Simplified Fit
 
-A private Android health dashboard for Fitbit data, with a Mac-hosted Codex coach.
+A private Android health dashboard for Fitbit data, with a choice of direct OpenRouter coaching or a Mac-hosted Codex coach.
 
 ## What it shows
 
@@ -9,7 +9,7 @@ A private Android health dashboard for Fitbit data, with a Mac-hosted Codex coac
 - Sleep score
 - Latest and resting heart rate
 - Daily total and active calories
-- A focused Codex chat through the Mac companion
+- A focused Coach using OpenRouter or the local Codex companion
 
 Google Health does not expose its readiness or Fitbit sleep scores through the API, so both are calculated locally from the same published factors and calibrated against the Fitbit scores on the connected device. Readiness requires seven valid sleep nights before a score appears. Its personal baseline keeps improving through 30 days.
 
@@ -42,7 +42,17 @@ The delivered APK is signed with the local key in `signing/simplified-fit.jks`. 
 
 Credentials and refresh tokens are AES-GCM encrypted with an Android Keystore key. Health summaries are kept locally for 30 days. Background sync runs every six hours on a connected network.
 
-## Run the Mac Coach
+## Configure Coach
+
+Open **Settings → Coach** and choose a provider:
+
+- **OpenRouter** calls the API directly from Android using `deepseek/deepseek-v4-flash`. Paste an OpenRouter API key and save it. The key is encrypted with Android Keystore and never sent to the Mac.
+- **Local Codex** uses the paired Mac companion and the already-authenticated Codex CLI. This mode does not require an API key, but the Mac must remain awake and reachable through Tailscale.
+
+OpenRouter streams responses as they are generated. The current Codex CLI integration returns its completed answer at once; both providers use the same progress and evidence UI.
+In OpenRouter mode, the compact health summary attached to a Coach question is sent to OpenRouter and its selected model provider.
+
+## Run the Mac Coach for Codex
 
 Build the companion:
 
@@ -53,7 +63,7 @@ cd companion
 
 Open `companion/build/Simplified Fit Companion.app`. Its `SF` menu-bar item can turn the Coach on or off and copy the pairing details. Paste those details in Android Settings. Both devices should be on the same Tailscale network.
 
-The companion invokes the already-authenticated local Codex CLI with a read-only sandbox. It does not use an OpenAI API key. Keep the Mac awake while chatting.
+The companion invokes the already-authenticated local Codex CLI with a read-only sandbox. It does not use an OpenAI API key. Keep the Mac awake while chatting in Local Codex mode.
 
 ## Score formulas
 

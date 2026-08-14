@@ -9,10 +9,16 @@ import androidx.lifecycle.viewModelScope
 import com.kego.simplifiedfit.SimplifiedFitApplication
 import com.kego.simplifiedfit.data.CoachClient
 import com.kego.simplifiedfit.data.CoachConnection
+import com.kego.simplifiedfit.data.CoachEvent
+import com.kego.simplifiedfit.data.CoachEvidence
+import com.kego.simplifiedfit.data.CoachProgress
+import com.kego.simplifiedfit.data.CoachProvider
+import com.kego.simplifiedfit.data.CoachRequest
 import com.kego.simplifiedfit.data.DailyHealth
 import com.kego.simplifiedfit.data.GoogleCredentials
 import com.kego.simplifiedfit.data.GoogleHealthClient
 import com.kego.simplifiedfit.data.GoogleSetupCredentials
+import com.kego.simplifiedfit.data.OpenRouterCoachClient
 import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import com.kego.simplifiedfit.domain.SleepSignals
@@ -24,6 +30,8 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
+enum class CoachPhase { IDLE, CONTEXT_READY, ANALYZING, WRITING, COMPLETE, ERROR }
+
 data class AppUiState(
     val snapshot: HealthSnapshot,
     val googleConnected: Boolean,
@@ -32,16 +40,28 @@ data class AppUiState(
     val setupMessage: String? = null,
     val coachMessage: String? = null,
     val coachReply: String? = null,
+    val coachSuggestions: List<String> = emptyList(),
     val coachBusy: Boolean = false,
+    val coachProvider: CoachProvider = CoachProvider.CODEX,
+    val openRouterConfigured: Boolean = false,
+    val coachPhase: CoachPhase = CoachPhase.IDLE,
+    val coachEvidence: CoachEvidence? = null,
+    val coachDurationMs: Long? = null,
+    val coachError: String? = null,
+    val coachRetryable: Boolean = false,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as SimplifiedFitApplication
+    private val initialCoachProvider = app.secureStore.coachProvider()
     var state by mutableStateOf(
         AppUiState(
             snapshot = HealthSnapshot.empty(),
             googleConnected = app.secureStore.googleCredentials() != null,
-            coachConnected = app.secureStore.coachConnection()?.let { CoachClient(it).isHealthy() } == true,
+            coachConnected = initialCoachProvider == CoachProvider.CODEX &&
+                app.secureStore.coachConnection()?.let { CoachClient(it).isHealthy() } == true,
+            coachProvider = initialCoachProvider,
+            openRouterConfigured = app.secureStore.openRouterApiKey() != null,
         ),
     )
         private set
@@ -108,6 +128,51 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(googleConnected = false, setupMessage = "Google Health disconnected")
     }
 
+    fun selectCoachProvider(provider: CoachProvider) {
+        if (state.coachBusy) return
+        app.secureStore.saveCoachProvider(provider)
+        state = state.copy(
+            coachProvider = provider,
+            setupMessage = when (provider) {
+                CoachProvider.CODEX -> "Local Codex selected"
+                CoachProvider.OPENROUTER -> if (state.openRouterConfigured) {
+                    "OpenRouter selected"
+                } else {
+                    "OpenRouter selected. Add an API key to use Coach."
+                }
+            },
+        )
+        if (provider == CoachProvider.CODEX) {
+            viewModelScope.launch {
+                val connected = withContext(Dispatchers.IO) {
+                    app.secureStore.coachConnection()?.let { CoachClient(it).isHealthy() } == true
+                }
+                state = state.copy(coachConnected = connected)
+            }
+        }
+    }
+
+    fun saveOpenRouterApiKey(apiKey: String) {
+        val trimmed = apiKey.trim()
+        if (trimmed.isEmpty()) {
+            state = state.copy(setupMessage = "Enter an OpenRouter API key")
+            return
+        }
+        app.secureStore.saveOpenRouterApiKey(trimmed)
+        app.secureStore.saveCoachProvider(CoachProvider.OPENROUTER)
+        state = state.copy(
+            coachProvider = CoachProvider.OPENROUTER,
+            openRouterConfigured = true,
+            setupMessage = "OpenRouter key saved",
+        )
+    }
+
+    fun clearOpenRouterApiKey() {
+        if (state.coachBusy) return
+        app.secureStore.clearOpenRouterApiKey()
+        state = state.copy(openRouterConfigured = false, setupMessage = "OpenRouter key removed")
+    }
+
     fun pairCoach(pairingText: String) {
         val parts = pairingText.trim().split('|', limit = 2)
         if (parts.size != 2 || !parts[0].startsWith("http")) {
@@ -126,24 +191,99 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var previousCoachQuestion: String? = null
+    private var previousCoachAnswer: String? = null
+
     fun askCoach(message: String) {
         val trimmedMessage = message.trim()
         if (trimmedMessage.isBlank() || state.coachBusy) return
 
-        val connection = app.secureStore.coachConnection()
-        state = state.copy(coachMessage = trimmedMessage, coachReply = null, coachBusy = connection != null)
-        if (connection == null) {
-            state = state.copy(coachBusy = false, coachReply = "Pair the Mac companion in Settings first.")
+        previousCoachQuestion = state.coachMessage.takeIf { state.coachPhase == CoachPhase.COMPLETE }
+        previousCoachAnswer = state.coachReply.takeIf { state.coachPhase == CoachPhase.COMPLETE }
+        startCoach(trimmedMessage)
+    }
+
+    fun retryCoach() {
+        if (state.coachBusy || !state.coachRetryable) return
+        state.coachMessage?.let(::startCoach)
+    }
+
+    private fun startCoach(message: String) {
+        val backend = when (state.coachProvider) {
+            CoachProvider.CODEX -> app.secureStore.coachConnection()?.let(::CoachClient)
+            CoachProvider.OPENROUTER -> app.secureStore.openRouterApiKey()?.let(::OpenRouterCoachClient)
+        }
+        if (backend == null) {
+            val error = when (state.coachProvider) {
+                CoachProvider.CODEX -> "Pair the Mac companion in Settings first."
+                CoachProvider.OPENROUTER -> "Add your OpenRouter API key in Settings first."
+            }
+            state = state.copy(
+                coachMessage = message,
+                coachReply = null,
+                coachBusy = false,
+                coachPhase = CoachPhase.ERROR,
+                coachError = error,
+                coachRetryable = false,
+            )
             return
         }
+
+        state = state.copy(
+            coachMessage = message,
+            coachReply = "",
+            coachSuggestions = emptyList(),
+            coachBusy = true,
+            coachPhase = CoachPhase.CONTEXT_READY,
+            coachEvidence = null,
+            coachDurationMs = null,
+            coachError = null,
+            coachRetryable = false,
+        )
         viewModelScope.launch {
-            state = state.copy(coachBusy = true, coachReply = null)
             runCatching {
-                withContext(Dispatchers.IO) { CoachClient(connection).ask(trimmedMessage, state.snapshot.coachContext) }
-            }.onSuccess {
-                state = state.copy(coachBusy = false, coachReply = it, coachConnected = true)
+                backend.ask(
+                    CoachRequest(
+                        message = message,
+                        healthContext = state.snapshot.coachContext,
+                        previousQuestion = previousCoachQuestion,
+                        previousAnswer = previousCoachAnswer,
+                    ),
+                ).collect { event ->
+                    state = when (event) {
+                        is CoachEvent.Progress -> state.copy(
+                            coachPhase = when (event.stage) {
+                                CoachProgress.CONTEXT_READY -> CoachPhase.CONTEXT_READY
+                                CoachProgress.ANALYZING -> CoachPhase.ANALYZING
+                                CoachProgress.WRITING -> CoachPhase.WRITING
+                            },
+                        )
+                        is CoachEvent.ResponseDelta -> state.copy(
+                            coachReply = state.coachReply.orEmpty() + event.text,
+                            coachPhase = CoachPhase.WRITING,
+                        )
+                        is CoachEvent.Complete -> state.copy(
+                            coachBusy = false,
+                            coachReply = event.answer.response,
+                            coachSuggestions = event.answer.suggestions,
+                            coachEvidence = event.answer.evidence,
+                            coachDurationMs = event.durationMs,
+                            coachPhase = CoachPhase.COMPLETE,
+                            coachError = null,
+                            coachRetryable = false,
+                            coachConnected = if (state.coachProvider == CoachProvider.CODEX) true else state.coachConnected,
+                        )
+                    }
+                }
             }.onFailure {
-                state = state.copy(coachBusy = false, coachReply = it.message ?: "Coach unavailable", coachConnected = false)
+                state = state.copy(
+                    coachBusy = false,
+                    coachReply = state.coachReply?.takeIf(String::isNotEmpty),
+                    coachSuggestions = emptyList(),
+                    coachPhase = CoachPhase.ERROR,
+                    coachError = it.message ?: "Coach unavailable",
+                    coachRetryable = true,
+                )
             }
         }
     }

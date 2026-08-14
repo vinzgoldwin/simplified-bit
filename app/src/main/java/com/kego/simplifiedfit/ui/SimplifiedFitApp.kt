@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -121,7 +123,12 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     onSettings = { settings = true },
                     onDestination = { destination = it },
                 )
-                else -> CoachScreen(state = state, onAsk = viewModel::askCoach, onDestination = { destination = it })
+                else -> CoachScreen(
+                    state = state,
+                    onAsk = viewModel::askCoach,
+                    onRetry = viewModel::retryCoach,
+                    onDestination = { destination = it },
+                )
             }
         }
     }
@@ -733,9 +740,35 @@ private fun CaloriesDetail(snapshot: HealthSnapshot) {
 }
 
 @Composable
-private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestination: (Destination) -> Unit) {
+private fun CoachScreen(
+    state: AppUiState,
+    onAsk: (String) -> Unit,
+    onRetry: () -> Unit,
+    onDestination: (Destination) -> Unit,
+) {
     var input by remember { mutableStateOf("") }
+    val scrollState = rememberScrollState()
+    var followOutput by remember(state.coachMessage) { mutableStateOf(true) }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val starterSuggestions = listOf(
+        "What should I prioritize today?" to FitColors.Green,
+        "What changed from my baseline?" to FitColors.Violet,
+        "What patterns stand out this week?" to FitColors.Cyan,
+    )
+    val followUpQuestions = state.coachSuggestions.takeIf { it.size == 3 } ?: run {
+        listOf(
+            "Which signal mattered most?",
+            "What should I monitor tomorrow?",
+            "What could change this advice?",
+        )
+    }
+    val followUpSuggestions = followUpQuestions.zip(listOf(FitColors.Green, FitColors.Violet, FitColors.Cyan))
+    val suggestions = when {
+        state.coachBusy -> emptyList()
+        state.coachPhase == CoachPhase.COMPLETE -> followUpSuggestions
+        state.coachMessage == null -> starterSuggestions
+        else -> emptyList()
+    }
     val sendMessage = {
         val message = input.trim()
         if (message.isNotEmpty()) {
@@ -743,19 +776,33 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
             input = ""
         }
     }
+    LaunchedEffect(scrollState.value, scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) followOutput = !scrollState.canScrollForward
+    }
+    LaunchedEffect(state.coachReply, state.coachPhase) {
+        if (followOutput) scrollState.scrollTo(scrollState.maxValue)
+    }
+    val providerStatus = when (state.coachProvider) {
+        CoachProvider.CODEX -> if (state.coachConnected) "Mac · Codex" else "Mac offline"
+        CoachProvider.OPENROUTER -> if (state.openRouterConfigured) "OpenRouter · DeepSeek V4 Flash" else "OpenRouter key needed"
+    }
+    val providerReady = when (state.coachProvider) {
+        CoachProvider.CODEX -> state.coachConnected
+        CoachProvider.OPENROUTER -> state.openRouterConfigured
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text("COACH", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 24.sp, letterSpacing = 2.2.sp))
                 Spacer(Modifier.height(13.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).background(FitColors.Green, CircleShape))
+                    Box(Modifier.size(12.dp).background(if (providerReady) FitColors.Green else FitColors.Muted, CircleShape))
                     Spacer(Modifier.width(10.dp))
-                    Text(if (state.coachConnected) "Mac connected" else "Mac offline", color = if (state.coachConnected) FitColors.Green else FitColors.Muted, fontSize = 16.sp)
+                    Text(providerStatus, color = if (providerReady) FitColors.Green else FitColors.Muted, fontSize = 16.sp)
                 }
             }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 22.dp)) {
             Spacer(Modifier.height(24.dp))
             if (state.coachMessage != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -768,22 +815,48 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                 }
             }
             if (state.coachMessage != null) Spacer(Modifier.height(48.dp))
-            when {
-                state.coachBusy -> Text("Thinking...", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 16.sp))
-                state.coachReply != null -> Text(state.coachReply, color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
-                state.coachMessage == null -> Text(
-                    if (state.coachConnected) "Ask a question about your health." else "Pair the Mac companion to start a conversation.",
+            if (state.coachMessage != null && state.coachPhase != CoachPhase.IDLE) {
+                CoachThinkingBlock(state)
+                state.coachReply?.takeIf(String::isNotBlank)?.let { reply ->
+                    Spacer(Modifier.height(24.dp))
+                    Text(reply, color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
+                }
+                state.coachError?.let { error ->
+                    Spacer(Modifier.height(18.dp))
+                    Text(error, color = FitColors.Coral, style = FitType.Body)
+                    if (state.coachRetryable) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "RETRY",
+                            color = FitColors.Green,
+                            style = FitType.Eyebrow,
+                            modifier = Modifier.clickable(onClick = onRetry).padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            } else if (state.coachMessage == null) {
+                Text(
+                    when (state.coachProvider) {
+                        CoachProvider.OPENROUTER -> if (state.openRouterConfigured) {
+                            "Ask a question about your health."
+                        } else {
+                            "Add your OpenRouter API key in Settings to start."
+                        }
+                        CoachProvider.CODEX -> if (state.coachConnected) {
+                            "Ask a question about your health."
+                        } else {
+                            "Pair the Mac companion to start a conversation."
+                        }
+                    },
                     color = FitColors.Muted,
                     style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
-            listOf(
-                "What should I prioritize today?" to FitColors.Green,
-                "What changed from my baseline?" to FitColors.Violet,
-                "What patterns stand out this week?" to FitColors.Cyan,
-            ).forEach { (suggestion, color) ->
+            if (suggestions.isNotEmpty()) {
+                Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
+            }
+            suggestions.forEach { (suggestion, color) ->
                 Row(Modifier.fillMaxWidth().clickable { input = suggestion }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     SuggestionMark(color); Spacer(Modifier.width(18.dp))
                     Text(suggestion, color = FitColors.White, style = FitType.Body, modifier = Modifier.weight(1f))
@@ -798,7 +871,8 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
         ) {
             BasicTextField(
                 value = input,
-                onValueChange = { input = it },
+                onValueChange = { if (!state.coachBusy) input = it },
+                enabled = !state.coachBusy,
                 textStyle = FitType.Body.copy(color = FitColors.White),
                 cursorBrush = SolidColor(FitColors.Green),
                 minLines = 1,
@@ -813,13 +887,128 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                     }
                 },
             )
-            Box(Modifier.size(48.dp).clickable {
-                sendMessage()
-            }.background(FitColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).clickable(enabled = !state.coachBusy) { sendMessage() }.background(FitColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
                 OutlineIcon(FitIcon.SEND, if (input.isBlank()) FitColors.Muted else FitColors.Green, 23.dp)
             }
         }
         if (!imeVisible) BottomNav(Destination.COACH, onDestination)
+    }
+}
+
+@Composable
+private fun CoachThinkingBlock(state: AppUiState) {
+    var expanded by remember(state.coachMessage) { mutableStateOf(state.coachBusy) }
+    LaunchedEffect(state.coachPhase) {
+        expanded = when (state.coachPhase) {
+            CoachPhase.COMPLETE, CoachPhase.ERROR -> false
+            else -> true
+        }
+    }
+    val canExpand = state.coachBusy || state.coachEvidence != null
+    val label = when (state.coachPhase) {
+        CoachPhase.COMPLETE -> "Thought for ${((state.coachDurationMs ?: 0L) / 1_000L).coerceAtLeast(1L)} seconds"
+        CoachPhase.ERROR -> "Thinking interrupted"
+        else -> "Thinking"
+    }
+    Row(
+        Modifier.clickable(enabled = canExpand) { expanded = !expanded }.padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (expanded) "⌄" else "›", color = FitColors.Muted, fontSize = 21.sp)
+        Spacer(Modifier.width(10.dp))
+        Text(label, color = FitColors.Muted, style = FitType.Body.copy(fontSize = 14.sp))
+    }
+    if (!expanded) return
+
+    if (state.coachPhase == CoachPhase.COMPLETE) {
+        state.coachEvidence?.let { evidence ->
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.padding(start = 8.dp).height(IntrinsicSize.Min)) {
+                Box(Modifier.width(1.dp).fillMaxHeight().background(FitColors.Rule))
+                Column(Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp)) {
+                    Text("SIGNALS USED", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+                    Spacer(Modifier.height(8.dp))
+                    evidence.signals.forEach { signal ->
+                        Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
+                            Box(Modifier.padding(top = 7.dp).size(5.dp).background(FitColors.Green, CircleShape))
+                            Spacer(Modifier.width(9.dp))
+                            Text(signal, color = FitColors.White, style = FitType.Body.copy(fontSize = 13.sp), modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("INTERPRETATION", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+                    Spacer(Modifier.height(6.dp))
+                    Text(evidence.interpretation, color = FitColors.White, style = FitType.Body.copy(fontSize = 13.sp))
+                }
+            }
+        }
+    } else if (state.coachPhase != CoachPhase.ERROR) {
+        Spacer(Modifier.height(16.dp))
+        CoachProgressTimeline(state.coachPhase)
+    }
+}
+
+@Composable
+private fun CoachProgressTimeline(phase: CoachPhase) {
+    val activeIndex = when (phase) {
+        CoachPhase.CONTEXT_READY -> 0
+        CoachPhase.ANALYZING -> 1
+        CoachPhase.WRITING -> 2
+        CoachPhase.COMPLETE -> 3
+        else -> 0
+    }
+    val labels = listOf(
+        if (activeIndex == 0) "Reading today’s health summary" else "Read today’s health summary",
+        when {
+            activeIndex < 1 -> "Compare signals with your baselines"
+            activeIndex == 1 -> "Comparing signals with your baselines"
+            else -> "Compared signals with your baselines"
+        },
+        when {
+            activeIndex < 2 -> "Prepare your recommendation"
+            activeIndex == 2 -> "Preparing your recommendation"
+            else -> "Prepared your recommendation"
+        },
+    )
+    Column(Modifier.padding(start = 8.dp)) {
+        labels.forEachIndexed { index, label ->
+            CoachProgressRow(
+                label = label,
+                done = index < activeIndex,
+                active = index == activeIndex,
+                last = index == labels.lastIndex,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoachProgressRow(label: String, done: Boolean, active: Boolean, last: Boolean) {
+    val markerColor = FitColors.Green
+    val waitingColor = FitColors.Rule
+    Row(Modifier.fillMaxWidth().height(if (last) 34.dp else 54.dp), verticalAlignment = Alignment.Top) {
+        Canvas(Modifier.width(18.dp).fillMaxHeight()) {
+            val center = Offset(size.width / 2f, 7.dp.toPx())
+            if (!last) drawLine(waitingColor, center, Offset(center.x, size.height), 1.dp.toPx())
+            when {
+                done -> drawCircle(markerColor, 5.dp.toPx(), center)
+                active -> {
+                    drawCircle(markerColor, 5.dp.toPx(), center, style = Stroke(1.5.dp.toPx()))
+                    drawCircle(markerColor, 2.dp.toPx(), center)
+                }
+                else -> drawCircle(waitingColor, 4.dp.toPx(), center, style = Stroke(1.dp.toPx()))
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            color = when {
+                active -> FitColors.White
+                done -> FitColors.Muted
+                else -> FitColors.Rule
+            },
+            style = FitType.Body.copy(fontSize = 14.sp),
+        )
     }
 }
 
@@ -839,6 +1028,7 @@ private fun SettingsScreen(
     var clientSecret by remember { mutableStateOf(savedSetup?.clientSecret.orEmpty()) }
     var authorizationCode by remember { mutableStateOf("") }
     var pairing by remember { mutableStateOf("") }
+    var openRouterKey by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         AppHeader("Settings", onBack = onBack)
         Rule(Modifier.padding(horizontal = 22.dp))
@@ -849,7 +1039,7 @@ private fun SettingsScreen(
             DataRow("Storage", "30 days")
             if (!state.googleConnected) {
                 SetupField("WEB CLIENT ID", clientId) { clientId = it }
-                SetupField("CLIENT SECRET", clientSecret) { clientSecret = it }
+                SetupField("CLIENT SECRET", clientSecret, secure = true) { clientSecret = it }
                 SettingsAction("SAVE & OPEN GOOGLE CONSENT", FitColors.Cyan, onClick = {
                     viewModel.prepareGoogleAuthorization(clientId, clientSecret)?.let { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -890,10 +1080,25 @@ private fun SettingsScreen(
             }
             Rule()
             SectionLabel("Coach")
-            DataRow("Mac companion", if (state.coachConnected) "Connected" else "Not connected", color = if (state.coachConnected) FitColors.Green else FitColors.White)
-            DataRow("Network", "Tailscale")
-            SetupField("PASTE PAIRING DETAILS", pairing) { pairing = it }
-            SettingsAction("PAIR MAC COACH", FitColors.Green, onClick = { viewModel.pairCoach(pairing) })
+            DataRow("Provider", if (state.coachProvider == CoachProvider.OPENROUTER) "OpenRouter" else "Local Codex", color = FitColors.Green)
+            if (state.coachProvider == CoachProvider.OPENROUTER) {
+                DataRow("Model", "DeepSeek V4 Flash")
+                DataRow("Connection", "Direct from Android")
+                DataRow("API key", if (state.openRouterConfigured) "Saved securely" else "Not configured", color = if (state.openRouterConfigured) FitColors.Green else FitColors.White)
+                SetupField("OPENROUTER API KEY", openRouterKey, secure = true) { openRouterKey = it }
+                SettingsAction("SAVE OPENROUTER KEY", FitColors.Green, onClick = {
+                    viewModel.saveOpenRouterApiKey(openRouterKey)
+                    openRouterKey = ""
+                })
+                if (state.openRouterConfigured) SettingsAction("REMOVE OPENROUTER KEY", FitColors.Coral, viewModel::clearOpenRouterApiKey)
+                SettingsAction("USE LOCAL CODEX", FitColors.Cyan, onClick = { viewModel.selectCoachProvider(CoachProvider.CODEX) })
+            } else {
+                DataRow("Mac companion", if (state.coachConnected) "Connected" else "Not connected", color = if (state.coachConnected) FitColors.Green else FitColors.White)
+                DataRow("Network", "Tailscale")
+                SetupField("PASTE PAIRING DETAILS", pairing) { pairing = it }
+                SettingsAction("PAIR MAC COACH", FitColors.Green, onClick = { viewModel.pairCoach(pairing) })
+                SettingsAction("USE OPENROUTER", FitColors.Cyan, onClick = { viewModel.selectCoachProvider(CoachProvider.OPENROUTER) })
+            }
             SectionLabel("Scores")
             Text("Scores are calculated locally from Fitbit's sleep and readiness factors. They are not medical scores.", color = FitColors.Muted, style = FitType.Body)
             state.setupMessage?.let {
@@ -906,7 +1111,7 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun SetupField(label: String, value: String, onValueChange: (String) -> Unit) {
+private fun SetupField(label: String, value: String, secure: Boolean = false, onValueChange: (String) -> Unit) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     var focused by remember { mutableStateOf(false) }
     val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
@@ -921,7 +1126,7 @@ private fun SetupField(label: String, value: String, onValueChange: (String) -> 
             textStyle = FitType.Body.copy(color = FitColors.White),
             cursorBrush = SolidColor(FitColors.Green),
             singleLine = true,
-            visualTransformation = if (label == "CLIENT SECRET") PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier
                 .fillMaxWidth()
                 .bringIntoViewRequester(bringIntoViewRequester)

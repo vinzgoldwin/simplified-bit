@@ -140,33 +140,73 @@ final class CompanionController: @unchecked Sendable {
             send(connection, status: 404, json: ["error": "Unknown request"])
             return
         }
+        let previousQuestion = body["previousQuestion"] as? String
+        let previousAnswer = body["previousAnswer"] as? String
         queue.async { [weak self] in
             do {
-                let answer = try self?.runCodex(message: message, health: health) ?? "Coach unavailable."
-                self?.send(connection, status: 200, json: ["response": answer])
+                let answer = try self?.runCodex(
+                    message: message,
+                    health: health,
+                    previousQuestion: previousQuestion,
+                    previousAnswer: previousAnswer
+                ) ?? CoachAnswer(
+                    response: "Coach unavailable.",
+                    evidence: CoachEvidence(signals: [], interpretation: ""),
+                    suggestions: []
+                )
+                self?.send(connection, status: 200, json: [
+                    "response": answer.response,
+                    "evidence": [
+                        "signals": answer.evidence.signals,
+                        "interpretation": answer.evidence.interpretation,
+                    ],
+                    "suggestions": answer.suggestions,
+                ])
             } catch {
                 self?.send(connection, status: 500, json: ["error": error.localizedDescription])
             }
         }
     }
 
-    private func runCodex(message: String, health: String) throws -> String {
+    private func runCodex(
+        message: String,
+        health: String,
+        previousQuestion: String?,
+        previousAnswer: String?
+    ) throws -> CoachAnswer {
+        let previousExchange = if let previousQuestion, let previousAnswer {
+            """
+            PREVIOUS EXCHANGE
+            Question: \(previousQuestion)
+            Answer: \(previousAnswer)
+            """
+        } else {
+            "PREVIOUS EXCHANGE\nNone"
+        }
         let prompt = """
         You are the personal wellness coach inside Simplified Fit. The supplied health summary is the sole source of personal facts. You may apply general wellness knowledge, but never invent measurements, history, symptoms, or causes. Treat unavailable fields as unknown. Do not use tools, inspect files, or seek external data.
 
-        Answer the question directly. Ground conclusions in the supplied signals and favor personal baselines and multi-day trends over generic ranges or a single reading. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data.
+        Answer the current question directly. Use the previous exchange only when it is relevant or resolves a follow-up reference. Ground conclusions in the supplied signals and favor personal baselines and multi-day trends over generic ranges or a single reading. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data.
 
         When a recommendation would help, give one or two low-risk actions for today. Make each action specific and realistic, cite the signals that motivate it, and say what to monitor next. Avoid generic filler, alarmist interpretations, and pretending that correlation proves a cause.
 
         This is general wellness guidance, not medical diagnosis or treatment. Do not prescribe medication or claim medical certainty. For urgent or severe symptoms, advise seeking appropriate local medical or emergency care. Keep the response calm, compact, and easy to scan.
 
+        Provide evidence as one to four short signal summaries and one concise interpretation written for the user. This is an evidence summary, not private chain-of-thought. Also provide exactly three follow-up questions, each under 60 characters. Each must naturally continue this specific question and answer, use relevant available health signals, and explore a distinct next step. Do not repeat the user's question or use generic starter questions.
+
         HEALTH SUMMARY
         \(health)
 
-        QUESTION
+        \(previousExchange)
+
+        CURRENT QUESTION
         \(message)
         """
         let codex = Self.codexPath()
+        let schemaURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("simplified-fit-coach-\(UUID().uuidString).json")
+        try Data(Self.outputSchema.utf8).write(to: schemaURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: schemaURL) }
         let process = Process()
         let input = Pipe()
         let output = Pipe()
@@ -179,6 +219,7 @@ final class CompanionController: @unchecked Sendable {
             "--config", "model_reasoning_effort=\"high\"",
             "--skip-git-repo-check",
             "--sandbox", "read-only",
+            "--output-schema", schemaURL.path,
             "--color", "never",
             "-",
         ]
@@ -194,10 +235,18 @@ final class CompanionController: @unchecked Sendable {
             let details = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "Codex failed"
             throw NSError(domain: "SimplifiedFitCoach", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: details])
         }
-        return text
+        do {
+            return try JSONDecoder().decode(CoachAnswer.self, from: Data(text.utf8))
+        } catch {
+            throw NSError(
+                domain: "SimplifiedFitCoach",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Coach returned an invalid structured response."]
+            )
+        }
     }
 
-    private func send(_ connection: NWConnection, status: Int, json: [String: String]) {
+    private func send(_ connection: NWConnection, status: Int, json: [String: Any]) {
         let payload = (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8)
         let reason = status == 200 ? "OK" : "Error"
         let header = "HTTP/1.1 \(status) \(reason)\r\nContent-Type: application/json\r\nContent-Length: \(payload.count)\r\nConnection: close\r\n\r\n"
@@ -244,6 +293,48 @@ final class CompanionController: @unchecked Sendable {
         let bytes = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         return bytes.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
+
+    private static let outputSchema = """
+    {
+      "type": "object",
+      "properties": {
+        "response": { "type": "string" },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "signals": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "maxItems": 4
+            },
+            "interpretation": { "type": "string" }
+          },
+          "required": ["signals", "interpretation"],
+          "additionalProperties": false
+        },
+        "suggestions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": ["response", "evidence", "suggestions"],
+      "additionalProperties": false
+    }
+    """
+}
+
+private struct CoachAnswer: Codable {
+    let response: String
+    let evidence: CoachEvidence
+    let suggestions: [String]
+}
+
+private struct CoachEvidence: Codable {
+    let signals: [String]
+    let interpretation: String
 }
 
 private struct HTTPRequest {

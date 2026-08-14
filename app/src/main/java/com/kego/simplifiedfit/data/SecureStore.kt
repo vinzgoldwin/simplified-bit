@@ -79,6 +79,24 @@ class SecureStore(context: Context) {
         preferences.edit().remove("coach_url").remove("coach_token").apply()
     }
 
+    fun saveOpenRouterApiKey(apiKey: String) {
+        put("openrouter_api_key", apiKey)
+    }
+
+    fun openRouterApiKey(): String? = get("openrouter_api_key")
+
+    fun clearOpenRouterApiKey() {
+        preferences.edit().remove("openrouter_api_key").apply()
+    }
+
+    fun coachProvider(): CoachProvider = preferences.getString("coach_provider", null)
+        ?.let { value -> CoachProvider.entries.firstOrNull { it.name == value } }
+        ?: CoachProvider.CODEX
+
+    fun saveCoachProvider(provider: CoachProvider) {
+        preferences.edit().putString("coach_provider", provider.name).apply()
+    }
+
     private fun put(name: String, value: String) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
