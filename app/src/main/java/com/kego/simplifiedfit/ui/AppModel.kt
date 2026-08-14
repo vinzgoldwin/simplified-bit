@@ -34,6 +34,7 @@ data class HealthSnapshot(
     val hrvTrend: List<DayPoint> = emptyList(),
     val restingHeartRateTrend: List<DayPoint> = emptyList(),
     val calorieTrend: List<DayPoint> = emptyList(),
+    val coachContext: String = "No health data is available.",
 ) {
     companion object {
         fun empty() = HealthSnapshot()

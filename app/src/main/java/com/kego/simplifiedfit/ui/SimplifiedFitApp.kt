@@ -779,7 +779,11 @@ private fun CoachScreen(state: AppUiState, onAsk: (String) -> Unit, onDestinatio
                 )
             }
             Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
-            listOf("Why is readiness lower?" to FitColors.Green, "How can I sleep better?" to FitColors.Violet, "Compare this week" to FitColors.Cyan).forEach { (suggestion, color) ->
+            listOf(
+                "What should I prioritize today?" to FitColors.Green,
+                "What changed from my baseline?" to FitColors.Violet,
+                "What patterns stand out this week?" to FitColors.Cyan,
+            ).forEach { (suggestion, color) ->
                 Row(Modifier.fillMaxWidth().clickable { input = suggestion }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     SuggestionMark(color); Spacer(Modifier.width(18.dp))
                     Text(suggestion, color = FitColors.White, style = FitType.Body, modifier = Modifier.weight(1f))

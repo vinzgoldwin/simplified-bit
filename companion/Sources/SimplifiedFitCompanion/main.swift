@@ -152,7 +152,13 @@ final class CompanionController: @unchecked Sendable {
 
     private func runCodex(message: String, health: String) throws -> String {
         let prompt = """
-        You are the health coach inside Simplified Fit. Answer from the supplied personal health summary only. Be concise, practical, and calm. You may discuss patterns and general wellness. Do not diagnose, prescribe, or claim medical certainty. If the message describes urgent symptoms, recommend local emergency care. Clearly name missing or stale data.
+        You are the personal wellness coach inside Simplified Fit. The supplied health summary is the sole source of personal facts. You may apply general wellness knowledge, but never invent measurements, history, symptoms, or causes. Treat unavailable fields as unknown. Do not use tools, inspect files, or seek external data.
+
+        Answer the question directly. Ground conclusions in the supplied signals and favor personal baselines and multi-day trends over generic ranges or a single reading. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data.
+
+        When a recommendation would help, give one or two low-risk actions for today. Make each action specific and realistic, cite the signals that motivate it, and say what to monitor next. Avoid generic filler, alarmist interpretations, and pretending that correlation proves a cause.
+
+        This is general wellness guidance, not medical diagnosis or treatment. Do not prescribe medication or claim medical certainty. For urgent or severe symptoms, advise seeking appropriate local medical or emergency care. Keep the response calm, compact, and easy to scan.
 
         HEALTH SUMMARY
         \(health)
@@ -166,7 +172,16 @@ final class CompanionController: @unchecked Sendable {
         let output = Pipe()
         let error = Pipe()
         process.executableURL = URL(fileURLWithPath: codex)
-        process.arguments = ["exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never", "-"]
+        process.arguments = [
+            "exec",
+            "--ephemeral",
+            "--model", "gpt-5.6-luna",
+            "--config", "model_reasoning_effort=\"high\"",
+            "--skip-git-repo-check",
+            "--sandbox", "read-only",
+            "--color", "never",
+            "-",
+        ]
         process.standardInput = input
         process.standardOutput = output
         process.standardError = error

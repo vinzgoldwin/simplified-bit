@@ -139,7 +139,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             state = state.copy(coachBusy = true, coachReply = null)
             runCatching {
-                withContext(Dispatchers.IO) { CoachClient(connection).ask(trimmedMessage, state.snapshot.coachContext()) }
+                withContext(Dispatchers.IO) { CoachClient(connection).ask(trimmedMessage, state.snapshot.coachContext) }
             }.onSuccess {
                 state = state.copy(coachBusy = false, coachReply = it, coachConnected = true)
             }.onFailure {
@@ -206,14 +206,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             hrvTrend = trend { it.hrv?.toFloat() },
             restingHeartRateTrend = trend { it.restingHeartRate?.toFloat() },
             calorieTrend = trend { it.totalCalories?.toFloat() },
+            coachContext = buildCoachContext(this, current, currentSleepBreakdown),
         )
     }
-
-    private fun HealthSnapshot.coachContext(): String = """
-        Today: readiness $readiness, sleep score $sleepScore,
-        sleep ${sleepMinutes}min of ${sleepTargetMinutes}min target, steps $steps,
-        latest heart rate $latestHeartRate bpm, resting heart rate $restingHeartRate bpm,
-        total calories $totalCalories kcal, active calories $activeCalories kcal,
-        valid sleep nights $validNights, last Google Health sync $lastSync.
-    """.trimIndent()
 }
