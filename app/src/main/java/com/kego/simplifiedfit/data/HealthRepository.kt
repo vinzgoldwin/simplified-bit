@@ -1,6 +1,7 @@
 package com.kego.simplifiedfit.data
 
 import com.kego.simplifiedfit.domain.ReadinessSignals
+import com.kego.simplifiedfit.domain.ReadinessSleep
 import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepSignals
 import java.time.LocalDate
@@ -54,17 +55,16 @@ class HealthRepository(
 
     private fun score(day: DailyHealth, earlier: List<DailyHealth>): DailyHealth {
         val sleepScore = calculateSleepScore(day, earlier)
-        val recentSleepScores = recentSleepScores(day, earlier, sleepScore)
+        val recentSleep = recentSleep(day, earlier)
         val readiness = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = day.hrv,
                 hrvBaseline = baseline(earlier, day.date) { it.hrv },
                 restingHeartRate = day.restingHeartRate,
                 restingHeartRateBaseline = baseline(earlier, day.date) { it.restingHeartRate },
-                sleepScore = sleepScore,
-                recentSleepScores = recentSleepScores,
+                recentSleep = recentSleep,
             ),
-        ).takeIf { recentSleepScores.size >= 7 && it > 0 }
+        ).takeIf { recentSleep.size >= 7 && it > 0 }
         return day.copy(sleepScore = sleepScore, readinessScore = readiness)
     }
 
@@ -84,19 +84,17 @@ class HealthRepository(
         )
     }
 
-    private fun recentSleepScores(day: DailyHealth, earlier: List<DailyHealth>, currentScore: Int?): List<Int> {
+    private fun recentSleep(day: DailyHealth, earlier: List<DailyHealth>): List<ReadinessSleep> {
         val start = day.date.minusDays(6)
-        val previousScores = earlier
-            .filter { it.date >= start && it.date.isBefore(day.date) }
-            .mapNotNull { previous ->
-                if ((previous.asleepMinutes ?: 0) < 180) return@mapNotNull null
-                calculateSleepScore(previous, earlier.filter { it.date.isBefore(previous.date) })
+        return (earlier + day)
+            .filter { it.date >= start && !it.date.isAfter(day.date) }
+            .sortedBy { it.date }
+            .mapNotNull { sleepDay ->
+                val asleep = sleepDay.asleepMinutes ?: return@mapNotNull null
+                val midpoint = sleepDay.sleepMidpointMinute ?: return@mapNotNull null
+                if (asleep < 180) return@mapNotNull null
+                ReadinessSleep(asleep, midpoint)
             }
-        return previousScores + if ((day.asleepMinutes ?: 0) >= 180 && currentScore != null) {
-            listOf(currentScore)
-        } else {
-            emptyList()
-        }
     }
 
     private fun <T> baseline(

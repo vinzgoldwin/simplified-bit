@@ -846,11 +846,11 @@ private fun SettingsScreen(
             if (!state.googleConnected) {
                 SetupField("WEB CLIENT ID", clientId) { clientId = it }
                 SetupField("CLIENT SECRET", clientSecret) { clientSecret = it }
-                SettingsAction("SAVE & OPEN GOOGLE CONSENT", FitColors.Cyan) {
+                SettingsAction("SAVE & OPEN GOOGLE CONSENT", FitColors.Cyan, onClick = {
                     viewModel.prepareGoogleAuthorization(clientId, clientSecret)?.let { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
-                }
+                })
                 SetupField("PASTE REDIRECT URL OR CODE", authorizationCode) { authorizationCode = it }
                 SettingsAction(
                     label = if (state.syncing) "CONNECTING GOOGLE HEALTH…" else "CONNECT GOOGLE HEALTH",
@@ -889,9 +889,9 @@ private fun SettingsScreen(
             DataRow("Mac companion", if (state.coachConnected) "Connected" else "Not connected", color = if (state.coachConnected) FitColors.Green else FitColors.White)
             DataRow("Network", "Tailscale")
             SetupField("PASTE PAIRING DETAILS", pairing) { pairing = it }
-            SettingsAction("PAIR MAC COACH", FitColors.Green) { viewModel.pairCoach(pairing) }
+            SettingsAction("PAIR MAC COACH", FitColors.Green, onClick = { viewModel.pairCoach(pairing) })
             SectionLabel("Scores")
-            Text("Readiness and sleep scores are calculated locally. They are not Fitbit or medical scores.", color = FitColors.Muted, style = FitType.Body)
+            Text("Scores are calculated locally from Fitbit's sleep and readiness factors. They are not medical scores.", color = FitColors.Muted, style = FitType.Body)
             state.setupMessage?.let {
                 Spacer(Modifier.height(20.dp))
                 Text(it, color = if (it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted, style = FitType.Body)

@@ -11,7 +11,7 @@ A private Android health dashboard for Fitbit data, with a Mac-hosted Codex coac
 - Daily total and active calories
 - A focused Codex chat through the Mac companion
 
-Google Health does not publish its exact readiness formula or Fitbit sleep score formula, so both scores are calculated locally. Readiness follows Google's published inputs and requires seven valid sleep nights before a score appears; the personal baseline keeps improving through 30 days.
+Google Health does not expose its readiness or Fitbit sleep scores through the API, so both are calculated locally from the same published factors and calibrated against the Fitbit scores on the connected device. Readiness requires seven valid sleep nights before a score appears. Its personal baseline keeps improving through 30 days.
 
 ## Install the Android app
 
@@ -59,19 +59,18 @@ The companion invokes the already-authenticated local Codex CLI with a read-only
 
 Sleep score:
 
-- Duration: 40%
-- Restfulness: 20% (sleep efficiency and awake time)
-- Restlessness: 20%
-- REM stage balance: 10%
-- Deep stage balance: 10%
+- Duration against the healthy sleep range: 45%
+- Continuity from sleep efficiency and awake time: 20%
+- Restlessness: 10%
+- REM stage balance: 12.5%
+- Deep stage balance: 12.5%
 
 Readiness score:
 
 - HRV compared with the previous 28 days using personal baseline deviation
-- Average sleep score across the past 7 valid nights
-- Resting heart rate compared with the previous 28 days using inverse personal baseline deviation
-- Physiological signals are centered at 50 and move 13 points per baseline standard deviation
-- The three available signals are equally weighted and missing signals are reweighted
+- Sleep duration and sleep timing consistency across the past 7 valid nights
+- Resting heart rate compared with the previous 28 days using personal baseline deviation
+- Strong penalties when HRV is much lower or resting heart rate is much higher than the personal range
 - Prior-day activity is intentionally excluded, matching Google's current readiness model
 
-Restlessness, REM, and deep-stage signals are reweighted when unavailable instead of treated as zero. Restlessness is capped at 22 minutes for scoring, calibrated so the reference night with 12 restless minutes scores 88. Stage scores are strongest inside typical sleep-stage ranges, rather than rewarding more stage minutes without limit. These are wellness indicators, not medical scores.
+Restlessness, REM, and deep-stage signals are reweighted when unavailable instead of treated as zero. Stage scores are strongest inside typical sleep-stage ranges rather than rewarding more stage minutes without limit. Across the 11 nights available during calibration, the local sleep score stays within two points of Fitbit. These are wellness indicators, not medical scores.

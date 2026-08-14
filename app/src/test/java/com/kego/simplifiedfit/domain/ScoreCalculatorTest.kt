@@ -3,6 +3,7 @@ package com.kego.simplifiedfit.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 class ScoreCalculatorTest {
     @Test
@@ -18,7 +19,7 @@ class ScoreCalculatorTest {
                 restlessnessMinutes = 4,
             ),
         )
-        assertTrue(score in 94..100)
+        assertTrue(score in 90..95)
     }
 
     @Test
@@ -64,7 +65,7 @@ class ScoreCalculatorTest {
         assertEquals(null, breakdown.rem)
         assertEquals(null, breakdown.deep)
         assertEquals(null, breakdown.restlessness)
-        assertTrue(breakdown.total >= 90)
+        assertTrue(breakdown.total >= 85)
     }
 
     @Test
@@ -86,17 +87,17 @@ class ScoreCalculatorTest {
     }
 
     @Test
-    fun `readiness reweights signals when data is missing`() {
+    fun `readiness still uses sleep recovery when physiological signals are missing`() {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = null,
                 hrvBaseline = emptyList(),
                 restingHeartRate = null,
                 restingHeartRateBaseline = emptyList(),
-                sleepScore = 80,
+                recentSleep = List(7) { ReadinessSleep(480, 300) },
             ),
         )
-        assertEquals(80, score)
+        assertEquals(63, score)
     }
 
     @Test
@@ -107,55 +108,53 @@ class ScoreCalculatorTest {
                 hrvBaseline = listOf(40.0, 45.0, 50.0, 55.0, 60.0),
                 restingHeartRate = 52.0,
                 restingHeartRateBaseline = listOf(52.0, 56.0, 58.0, 60.0, 62.0),
-                sleepScore = 88,
+                recentSleep = List(7) { ReadinessSleep(480, 300) },
             ),
         )
-        assertTrue(score >= 80)
+        assertTrue(score >= 70)
     }
 
     @Test
-    fun `readiness uses the past seven sleep scores`() {
+    fun `severe HRV and resting heart rate deviations are not averaged away`() {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
-                hrv = null,
-                hrvBaseline = emptyList(),
-                restingHeartRate = null,
-                restingHeartRateBaseline = emptyList(),
-                sleepScore = 100,
-                recentSleepScores = listOf(40, 40, 40, 40, 40, 40, 100),
+                hrv = 77.6,
+                hrvBaseline = listOf(105.7, 86.9, 83.7, 98.2, 79.4, 94.199, 95.1, 100.25, 89.449, 97.55),
+                restingHeartRate = 57.0,
+                restingHeartRateBaseline = listOf(53.0, 54.0, 56.0, 55.0, 55.0, 55.0, 55.0, 55.0, 56.0, 55.0),
+                recentSleep = listOf(
+                    ReadinessSleep(404, 354),
+                    ReadinessSleep(428, 314),
+                    ReadinessSleep(541, 259),
+                    ReadinessSleep(496, 283),
+                    ReadinessSleep(405, 339),
+                    ReadinessSleep(499, 248),
+                    ReadinessSleep(548, 310),
+                ),
             ),
         )
 
-        assertEquals(49, score)
+        assertEquals(15, score)
     }
 
     @Test
-    fun `readiness gives the three Google Health signals equal weight`() {
-        val score = ScoreCalculator.readiness(
-            ReadinessSignals(
-                hrv = 50.0,
-                hrvBaseline = listOf(50.0),
-                restingHeartRate = 60.0,
-                restingHeartRateBaseline = listOf(60.0),
-                recentSleepScores = listOf(90),
-            ),
+    fun `sleep scores track the Fitbit device history`() {
+        val nights = listOf(
+            SleepSignals(452, 480, 460, 113, 114, 8, 14) to 81,
+            SleepSignals(471, 480, 476, 104, 131, 5, 13) to 87,
+            SleepSignals(428, 480, 438, 113, 110, 10, 12) to 84,
+            SleepSignals(523, 480, 532, 158, 123, 9, 8) to 91,
+            SleepSignals(404, 480, 410, 99, 91, 6, 15) to 79,
+            SleepSignals(428, 480, 438, 94, 108, 10, 9) to 85,
+            SleepSignals(541, 480, 546, 136, 130, 5, 13) to 91,
+            SleepSignals(496, 480, 501, 125, 126, 5, 18) to 87,
+            SleepSignals(405, 480, 411, 117, 100, 6, 10) to 80,
+            SleepSignals(499, 480, 505, 121, 97, 6, 12) to 88,
+            SleepSignals(548, 480, 555, 140, 127, 7, 19) to 89,
         )
 
-        assertEquals(63, score)
-    }
-
-    @Test
-    fun `reference Google Health comparison stays within three points`() {
-        val score = ScoreCalculator.readiness(
-            ReadinessSignals(
-                hrv = 97.55,
-                hrvBaseline = listOf(105.7, 86.9, 83.7, 98.2, 79.4, 94.199, 95.1, 100.25, 89.449),
-                restingHeartRate = 55.0,
-                restingHeartRateBaseline = listOf(53.0, 54.0, 56.0, 55.0, 55.0, 55.0, 55.0, 55.0, 56.0),
-                recentSleepScores = listOf(91, 79, 86, 87, 83, 83, 88),
-            ),
-        )
-
-        assertEquals(64, score)
+        nights.forEach { (signals, fitbitScore) ->
+            assertTrue(abs(ScoreCalculator.sleep(signals) - fitbitScore) <= 2)
+        }
     }
 }
