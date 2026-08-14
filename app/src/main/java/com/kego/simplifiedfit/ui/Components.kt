@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -212,36 +214,15 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                 drawCircle(color, w * .035f, Offset(w * .64f, h * .47f))
             }
             FitIcon.SETTINGS -> {
-                val gear = Path().apply {
-                    moveTo(w * .422f, h * .125f)
-                    lineTo(w * .578f, h * .125f)
-                    lineTo(w * .603f, h * .239f)
-                    cubicTo(w * .678f, h * .276f, w * .753f, h * .319f, w * .775f, h * .344f)
-                    lineTo(w * .881f, h * .294f)
-                    lineTo(w * .959f, h * .430f)
-                    lineTo(w * .875f, h * .502f)
-                    cubicTo(w * .880f, h * .527f, w * .880f, h * .553f, w * .875f, h * .577f)
-                    lineTo(w * .959f, h * .648f)
-                    lineTo(w * .881f, h * .784f)
-                    lineTo(w * .775f, h * .734f)
-                    cubicTo(w * .709f, h * .794f, w * .653f, h * .828f, w * .603f, h * .864f)
-                    lineTo(w * .578f, h * .875f)
-                    lineTo(w * .422f, h * .875f)
-                    lineTo(w * .397f, h * .761f)
-                    cubicTo(w * .322f, h * .724f, w * .247f, h * .681f, w * .225f, h * .656f)
-                    lineTo(w * .119f, h * .706f)
-                    lineTo(w * .041f, h * .570f)
-                    lineTo(w * .125f, h * .498f)
-                    cubicTo(w * .120f, h * .473f, w * .120f, h * .447f, w * .125f, h * .423f)
-                    lineTo(w * .041f, h * .352f)
-                    lineTo(w * .119f, h * .216f)
-                    lineTo(w * .225f, h * .266f)
-                    cubicTo(w * .291f, h * .206f, w * .347f, h * .172f, w * .397f, h * .136f)
-                    close()
+                val gear = PathParser().parsePathString(
+                    "M27 8h10l1.6 7.3a18.2 18.2 0 0 1 4.8 2.8l6.8-3.2 5 8.7-5.4 4.6c.3 1.7.3 3.4 0 5.1l5.4 4.6-5 8.7-6.8-3.2a18.2 18.2 0 0 1-4.8 2.8L37 56H27l-1.6-7.3a18.2 18.2 0 0 1-4.8-2.8l-6.8 3.2-5-8.7 5.4-4.6a15.8 15.8 0 0 1 0-5.1l-5.4-4.6 5-8.7 6.8 3.2a18.2 18.2 0 0 1 4.8-2.8L27 8Z",
+                ).toPath()
+                val pathScale = w / 64f
+                val gearStroke = Stroke(width = 2.8f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                scale(pathScale, pathScale) {
+                    drawPath(gear, color, style = gearStroke)
+                    drawCircle(color, 8.2f, Offset(32f, 32f), style = gearStroke)
                 }
-                val gearStroke = Stroke(width = stroke.width, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                drawPath(gear, color, style = gearStroke)
-                drawCircle(color, w * .128f, Offset(w / 2f, h / 2f), style = gearStroke)
             }
             FitIcon.BACK -> {
                 drawLine(color, Offset(w * .72f, h * .14f), Offset(w * .25f, h * .5f), stroke.width, StrokeCap.Round)
