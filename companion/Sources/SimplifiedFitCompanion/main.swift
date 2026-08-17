@@ -151,15 +151,12 @@ final class CompanionController: @unchecked Sendable {
                     previousAnswer: previousAnswer
                 ) ?? CoachAnswer(
                     response: "Coach unavailable.",
-                    evidence: CoachEvidence(signals: [], interpretation: ""),
+                    reasoning: [],
                     suggestions: []
                 )
                 self?.send(connection, status: 200, json: [
                     "response": answer.response,
-                    "evidence": [
-                        "signals": answer.evidence.signals,
-                        "interpretation": answer.evidence.interpretation,
-                    ],
+                    "reasoning": answer.reasoning,
                     "suggestions": answer.suggestions,
                 ])
             } catch {
@@ -186,13 +183,15 @@ final class CompanionController: @unchecked Sendable {
         let prompt = """
         You are the personal wellness coach inside Simplified Fit. The supplied health summary is the sole source of personal facts. You may apply general wellness knowledge, but never invent measurements, history, symptoms, or causes. Treat unavailable fields as unknown. Do not use tools, inspect files, or seek external data.
 
-        Answer the current question directly. Use the previous exchange only when it is relevant or resolves a follow-up reference. Ground conclusions in the supplied signals and favor personal baselines and multi-day trends over generic ranges or a single reading. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data.
+        Answer the current question directly. Use the previous exchange only when it is relevant or resolves a follow-up reference. Ground conclusions in the supplied signals and favor personal baselines and multi-day trends over generic ranges or a single reading. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data. The response field must contain only the direct answer and any useful actions or monitoring advice. Do not repeat the reasoning summary or follow-up questions inside the response field.
 
         When a recommendation would help, give one or two low-risk actions for today. Make each action specific and realistic, cite the signals that motivate it, and say what to monitor next. Avoid generic filler, alarmist interpretations, and pretending that correlation proves a cause.
 
         This is general wellness guidance, not medical diagnosis or treatment. Do not prescribe medication or claim medical certainty. For urgent or severe symptoms, advise seeking appropriate local medical or emergency care. Keep the response calm, compact, and easy to scan.
 
-        Provide evidence as one to four short signal summaries and one concise interpretation written for the user. This is an evidence summary, not private chain-of-thought. Also provide exactly three follow-up questions, each under 60 characters. Each must naturally continue this specific question and answer, use relevant available health signals, and explore a distinct next step. Do not repeat the user's question or use generic starter questions.
+        Provide a concise reasoning summary as two to four short steps explaining how the supplied signals support the answer. This is a user-facing summary, not private chain-of-thought.
+
+        Also provide exactly three follow-up questions, each under 60 characters. Write them exactly as the user would send them, using first-person wording such as I, me, or my. Each must naturally continue this specific question and answer and be answerable only from the supplied health summary and conversation. Never suggest or ask about food, meals, drinks, or hydration because those details are not supplied. Do not put actions, monitoring instructions, schema labels, placeholders, or field names in the follow-up list.
 
         HEALTH SUMMARY
         \(health)
@@ -299,19 +298,11 @@ final class CompanionController: @unchecked Sendable {
       "type": "object",
       "properties": {
         "response": { "type": "string" },
-        "evidence": {
-          "type": "object",
-          "properties": {
-            "signals": {
-              "type": "array",
-              "items": { "type": "string" },
-              "minItems": 1,
-              "maxItems": 4
-            },
-            "interpretation": { "type": "string" }
-          },
-          "required": ["signals", "interpretation"],
-          "additionalProperties": false
+        "reasoning": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 4
         },
         "suggestions": {
           "type": "array",
@@ -320,7 +311,7 @@ final class CompanionController: @unchecked Sendable {
           "maxItems": 3
         }
       },
-      "required": ["response", "evidence", "suggestions"],
+      "required": ["response", "reasoning", "suggestions"],
       "additionalProperties": false
     }
     """
@@ -328,13 +319,8 @@ final class CompanionController: @unchecked Sendable {
 
 private struct CoachAnswer: Codable {
     let response: String
-    let evidence: CoachEvidence
+    let reasoning: [String]
     let suggestions: [String]
-}
-
-private struct CoachEvidence: Codable {
-    let signals: [String]
-    let interpretation: String
 }
 
 private struct HTTPRequest {

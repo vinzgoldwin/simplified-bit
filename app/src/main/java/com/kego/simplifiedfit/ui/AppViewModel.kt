@@ -10,7 +10,6 @@ import com.kego.simplifiedfit.SimplifiedFitApplication
 import com.kego.simplifiedfit.data.CoachClient
 import com.kego.simplifiedfit.data.CoachConnection
 import com.kego.simplifiedfit.data.CoachEvent
-import com.kego.simplifiedfit.data.CoachEvidence
 import com.kego.simplifiedfit.data.CoachProgress
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.data.CoachRequest
@@ -32,6 +31,13 @@ import kotlin.math.roundToInt
 
 enum class CoachPhase { IDLE, CONTEXT_READY, ANALYZING, WRITING, COMPLETE, ERROR }
 
+data class CoachTurn(
+    val question: String,
+    val answer: String,
+    val reasoning: List<String>,
+    val durationMs: Long,
+)
+
 data class AppUiState(
     val snapshot: HealthSnapshot,
     val googleConnected: Boolean,
@@ -41,11 +47,12 @@ data class AppUiState(
     val coachMessage: String? = null,
     val coachReply: String? = null,
     val coachSuggestions: List<String> = emptyList(),
+    val coachTurns: List<CoachTurn> = emptyList(),
     val coachBusy: Boolean = false,
     val coachProvider: CoachProvider = CoachProvider.CODEX,
     val openRouterConfigured: Boolean = false,
     val coachPhase: CoachPhase = CoachPhase.IDLE,
-    val coachEvidence: CoachEvidence? = null,
+    val coachReasoning: List<String> = emptyList(),
     val coachDurationMs: Long? = null,
     val coachError: String? = null,
     val coachRetryable: Boolean = false,
@@ -200,15 +207,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         previousCoachQuestion = state.coachMessage.takeIf { state.coachPhase == CoachPhase.COMPLETE }
         previousCoachAnswer = state.coachReply.takeIf { state.coachPhase == CoachPhase.COMPLETE }
-        startCoach(trimmedMessage)
+        val completedTurn = if (state.coachPhase == CoachPhase.COMPLETE) {
+            val question = state.coachMessage
+            val answer = state.coachReply
+            if (question != null && answer != null) {
+                CoachTurn(question, answer, state.coachReasoning, state.coachDurationMs ?: 0L)
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+        val turns = (state.coachTurns + listOfNotNull(completedTurn)).takeLast(MAX_VISIBLE_COACH_TURNS)
+        startCoach(trimmedMessage, turns)
     }
 
     fun retryCoach() {
         if (state.coachBusy || !state.coachRetryable) return
-        state.coachMessage?.let(::startCoach)
+        state.coachMessage?.let { startCoach(it, state.coachTurns) }
     }
 
-    private fun startCoach(message: String) {
+    private fun startCoach(message: String, turns: List<CoachTurn>) {
         val backend = when (state.coachProvider) {
             CoachProvider.CODEX -> app.secureStore.coachConnection()?.let(::CoachClient)
             CoachProvider.OPENROUTER -> app.secureStore.openRouterApiKey()?.let(::OpenRouterCoachClient)
@@ -225,6 +244,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 coachPhase = CoachPhase.ERROR,
                 coachError = error,
                 coachRetryable = false,
+                coachTurns = turns,
             )
             return
         }
@@ -233,9 +253,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             coachMessage = message,
             coachReply = "",
             coachSuggestions = emptyList(),
+            coachTurns = turns,
             coachBusy = true,
             coachPhase = CoachPhase.CONTEXT_READY,
-            coachEvidence = null,
+            coachReasoning = emptyList(),
             coachDurationMs = null,
             coachError = null,
             coachRetryable = false,
@@ -266,7 +287,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             coachBusy = false,
                             coachReply = event.answer.response,
                             coachSuggestions = event.answer.suggestions,
-                            coachEvidence = event.answer.evidence,
+                            coachReasoning = event.answer.reasoning,
                             coachDurationMs = event.durationMs,
                             coachPhase = CoachPhase.COMPLETE,
                             coachError = null,
@@ -286,6 +307,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    private companion object {
+        const val MAX_VISIBLE_COACH_TURNS = 8
     }
 
     private fun List<DailyHealth>.toSnapshot(): HealthSnapshot {

@@ -1,6 +1,7 @@
 package com.kego.simplifiedfit.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -14,14 +15,9 @@ enum class CoachProvider { CODEX, OPENROUTER }
 
 data class CoachConnection(val baseUrl: String, val token: String)
 
-data class CoachEvidence(
-    val signals: List<String>,
-    val interpretation: String,
-)
-
 data class CoachAnswer(
     val response: String,
-    val evidence: CoachEvidence? = null,
+    val reasoning: List<String>,
     val suggestions: List<String>,
 )
 
@@ -48,16 +44,34 @@ internal fun parseCoachAnswer(text: String): CoachAnswer {
     val json = JSONObject(text)
     val suggestions = json.optJSONArray("suggestions")?.let { array ->
         (0 until array.length()).mapNotNull { index -> array.optString(index).takeIf(String::isNotBlank) }
-    }.orEmpty()
-    val evidence = json.optJSONObject("evidence")?.let { value ->
-        CoachEvidence(
-            signals = value.optJSONArray("signals")?.let { array ->
-                (0 until array.length()).mapNotNull { index -> array.optString(index).takeIf(String::isNotBlank) }
-            }.orEmpty(),
-            interpretation = value.optString("interpretation"),
-        )
+    }.orEmpty().validFollowUpQuestions()
+    val reasoning = (json.optJSONArray("reasoning")?.let { array ->
+        (0 until array.length()).mapNotNull { index -> array.optString(index).takeIf(String::isNotBlank) }
+    } ?: json.optJSONObject("evidence")?.let { evidence ->
+        buildList {
+            evidence.optJSONArray("signals")?.let { signals ->
+                repeat(signals.length()) { index -> signals.optString(index).takeIf(String::isNotBlank)?.let(::add) }
+            }
+            evidence.optString("interpretation").takeIf(String::isNotBlank)?.let(::add)
+        }
+    }).orEmpty()
+    return CoachAnswer(json.getString("response"), reasoning, suggestions)
+}
+
+internal fun List<String>.validFollowUpQuestions(): List<String> {
+    val fallback = listOf(
+        "Which signal changed most for me?",
+        "What should I monitor tomorrow?",
+        "How should I adjust my day?",
+    )
+    val valid = map(String::trim).filter { question ->
+        question.length in 8..60 &&
+            question.endsWith('?') &&
+            !question.contains('_') &&
+            Regex("\\b(i|me|my)\\b", RegexOption.IGNORE_CASE).containsMatchIn(question) &&
+            !Regex("\\b(you|your|eat|ate|food|meal|drink|drank|hydrat\\w*)\\b", RegexOption.IGNORE_CASE).containsMatchIn(question)
     }
-    return CoachAnswer(json.getString("response"), evidence, suggestions)
+    return (valid + fallback).distinctBy(String::lowercase).take(3)
 }
 
 class CoachClient(private val connection: CoachConnection) : CoachBackend {
@@ -116,7 +130,7 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         http.setRequestProperty("Accept", "text/event-stream")
         http.setRequestProperty("X-Title", "Simplified Fit")
         http.outputStream.use { output ->
-            output.write(openRouterPayload(request).toString().toByteArray(StandardCharsets.UTF_8))
+            output.write(openRouterPayload(request, stream = true).toString().toByteArray(StandardCharsets.UTF_8))
         }
 
         if (http.responseCode !in 200..299) {
@@ -129,7 +143,6 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
 
         val structured = StringBuilder()
         var emittedResponse = ""
-        var pendingDelta = ""
         var writingStarted = false
 
         http.inputStream.bufferedReader().use { reader ->
@@ -155,34 +168,70 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
                 structured.append(content)
                 val decoded = decodedResponsePrefix(structured.toString()) ?: continue
                 if (!decoded.startsWith(emittedResponse)) continue
-                pendingDelta += decoded.removePrefix(emittedResponse)
+                val delta = decoded.removePrefix(emittedResponse)
                 emittedResponse = decoded
-
-                if (pendingDelta.length >= 48 || pendingDelta.endsAtPhraseBoundary()) {
-                    if (!writingStarted) {
-                        emit(CoachEvent.Progress(CoachProgress.WRITING))
-                        writingStarted = true
-                    }
-                    emit(CoachEvent.ResponseDelta(pendingDelta))
-                    pendingDelta = ""
+                if (delta.isEmpty()) continue
+                if (!writingStarted) {
+                    emit(CoachEvent.Progress(CoachProgress.WRITING))
+                    writingStarted = true
                 }
+                emit(CoachEvent.ResponseDelta(delta))
             }
         }
 
-        val answer = parseCoachAnswer(structured.toString())
+        val answer = runCatching { parseCoachAnswer(structured.toString()) }
+            .getOrElse { healedAnswer(request) }
         val remaining = when {
-            answer.response.startsWith(emittedResponse) -> pendingDelta + answer.response.removePrefix(emittedResponse)
+            answer.response.startsWith(emittedResponse) -> answer.response.removePrefix(emittedResponse)
             else -> answer.response
         }
         if (!writingStarted) emit(CoachEvent.Progress(CoachProgress.WRITING))
-        if (remaining.isNotEmpty()) emit(CoachEvent.ResponseDelta(remaining))
+        remaining.chunked(6).forEach { chunk ->
+            emit(CoachEvent.ResponseDelta(chunk))
+            delay(12)
+        }
         emit(CoachEvent.Complete(answer, System.currentTimeMillis() - startedAt))
     }.flowOn(Dispatchers.IO)
 
-    private fun openRouterPayload(request: CoachRequest): JSONObject = JSONObject()
+    private fun healedAnswer(request: CoachRequest): CoachAnswer {
+        val http = URL(OPENROUTER_URL).openConnection() as HttpURLConnection
+        http.requestMethod = "POST"
+        http.connectTimeout = 15_000
+        http.readTimeout = 120_000
+        http.doOutput = true
+        http.setRequestProperty("Authorization", "Bearer $apiKey")
+        http.setRequestProperty("Content-Type", "application/json")
+        http.setRequestProperty("X-Title", "Simplified Fit")
+        val payload = openRouterPayload(request, stream = false)
+            .put("plugins", JSONArray().put(JSONObject().put("id", "response-healing")))
+        http.outputStream.use { output ->
+            output.write(payload.toString().toByteArray(StandardCharsets.UTF_8))
+        }
+        val body = (if (http.responseCode in 200..299) http.inputStream else http.errorStream)
+            .bufferedReader()
+            .use { it.readText() }
+        if (http.responseCode !in 200..299) {
+            val message = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }.getOrNull()
+            error(message?.takeIf(String::isNotBlank) ?: "OpenRouter retry failed (${http.responseCode})")
+        }
+        val content = JSONObject(body)
+            .getJSONArray("choices")
+            .getJSONObject(0)
+            .getJSONObject("message")
+            .getString("content")
+        return parseCoachAnswer(content)
+    }
+
+    private fun openRouterPayload(request: CoachRequest, stream: Boolean): JSONObject = JSONObject()
         .put("model", MODEL)
-        .put("stream", true)
-        .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", coachPrompt(request))))
+        .put("stream", stream)
+        .put("reasoning", JSONObject().put("effort", "low"))
+        .put(
+            "messages",
+            JSONArray()
+                .put(JSONObject().put("role", "system").put("content", "Return only JSON matching the provided schema. Never wrap or label the JSON with Markdown."))
+                .put(JSONObject().put("role", "user").put("content", coachPrompt(request))),
+        )
         .put(
             "response_format",
             JSONObject()
@@ -199,44 +248,39 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
 
     private companion object {
         const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-        const val MODEL = "deepseek/deepseek-v4-flash"
+        const val MODEL = "~deepseek/deepseek-v4-flash-latest"
 
         val OUTPUT_SCHEMA = JSONObject()
             .put("type", "object")
             .put(
                 "properties",
                 JSONObject()
-                    .put("response", JSONObject().put("type", "string"))
                     .put(
-                        "evidence",
+                        "response",
                         JSONObject()
-                            .put("type", "object")
-                            .put(
-                                "properties",
-                                JSONObject()
-                                    .put(
-                                        "signals",
-                                        JSONObject()
-                                            .put("type", "array")
-                                            .put("items", JSONObject().put("type", "string"))
-                                            .put("minItems", 1)
-                                            .put("maxItems", 4),
-                                    )
-                                    .put("interpretation", JSONObject().put("type", "string")),
-                            )
-                            .put("required", JSONArray().put("signals").put("interpretation"))
-                            .put("additionalProperties", false),
+                            .put("type", "string")
+                            .put("description", "Direct answer only. May include actions and monitoring advice. Must not repeat reasoning or follow-up questions."),
+                    )
+                    .put(
+                        "reasoning",
+                        JSONObject()
+                            .put("type", "array")
+                            .put("description", "Two to four concise user-facing steps that summarize how supplied signals support the answer.")
+                            .put("items", JSONObject().put("type", "string"))
+                            .put("minItems", 2)
+                            .put("maxItems", 4),
                     )
                     .put(
                         "suggestions",
                         JSONObject()
                             .put("type", "array")
+                            .put("description", "Exactly three grounded first-person questions the user can send next. Never actions, labels, placeholders, nutrition, or hydration topics.")
                             .put("items", JSONObject().put("type", "string"))
                             .put("minItems", 3)
                             .put("maxItems", 3),
                     ),
             )
-            .put("required", JSONArray().put("response").put("evidence").put("suggestions"))
+            .put("required", JSONArray().put("response").put("reasoning").put("suggestions"))
             .put("additionalProperties", false)
     }
 }
@@ -254,13 +298,15 @@ internal fun coachPrompt(request: CoachRequest): String {
     return """
         You are the personal wellness coach inside Simplified Fit. The supplied health summary is the sole source of personal facts. You may apply general wellness knowledge, but never invent measurements, history, symptoms, or causes. Treat unavailable fields as unknown. Do not use tools or seek external data.
 
-        Answer the current question directly. Use the previous exchange only when relevant. Ground conclusions in supplied signals and favor personal baselines and multi-day trends. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data.
+        Answer the current question directly. Use the previous exchange only when relevant. Ground conclusions in supplied signals and favor personal baselines and multi-day trends. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data. The response field must contain only the direct answer and any useful actions or monitoring advice. Do not repeat the reasoning summary or follow-up questions inside the response field.
 
         When a recommendation would help, give one or two low-risk actions for today. Make actions specific and realistic, cite the signals that motivate them, and say what to monitor next. Avoid generic filler, alarmist interpretations, and pretending correlation proves a cause.
 
         This is general wellness guidance, not medical diagnosis or treatment. Do not prescribe medication or claim medical certainty. For urgent or severe symptoms, advise seeking appropriate local medical or emergency care. Keep the response calm, compact, and easy to scan.
 
-        Provide evidence as one to four short signal summaries and one concise interpretation written for the user. This is an evidence summary, not private chain-of-thought. Also provide exactly three distinct follow-up questions, each under 60 characters.
+        Provide a concise reasoning summary as two to four short steps explaining how the supplied signals support the answer. This is a user-facing summary, not private chain-of-thought.
+
+        Also provide exactly three distinct follow-up questions, each under 60 characters. Write them exactly as the user would send them, using first-person wording such as I, me, or my. They must be questions answerable only from the supplied health summary and conversation. Never suggest or ask about food, meals, drinks, or hydration because those details are not supplied. Do not put actions, monitoring instructions, schema labels, placeholders, or field names in the follow-up list.
 
         HEALTH SUMMARY
         ${request.healthContext}
@@ -299,9 +345,4 @@ internal fun decodedResponsePrefix(structured: String): String? {
     if (incompleteUnicode != null) raw = raw.substring(0, incompleteUnicode.range.first)
     if (raw.takeLastWhile { it == '\\' }.length % 2 == 1) raw = raw.dropLast(1)
     return runCatching { JSONObject("{\"value\":\"$raw\"}").getString("value") }.getOrNull()
-}
-
-private fun String.endsAtPhraseBoundary(): Boolean {
-    val trimmed = trimEnd()
-    return trimmed.endsWith('.') || trimmed.endsWith('!') || trimmed.endsWith('?') || trimmed.endsWith('\n')
 }

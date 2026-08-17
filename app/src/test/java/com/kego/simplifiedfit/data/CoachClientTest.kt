@@ -1,39 +1,48 @@
 package com.kego.simplifiedfit.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class CoachClientTest {
     @Test
-    fun `parses coach evidence and follow up suggestions`() {
+    fun `parses coach reasoning and follow up suggestions`() {
         val answer = parseCoachAnswer(
             """
             {
               "response": "Prioritize recovery today.",
-              "evidence": {
-                "signals": ["HRV is below baseline", "Resting heart rate is elevated"],
-                "interpretation": "The combined pattern suggests reduced recovery."
-              },
+              "reasoning": ["HRV is below baseline", "Resting heart rate is elevated"],
               "suggestions": ["What should I monitor?", "Can I walk today?", "How was my sleep?"]
             }
             """.trimIndent(),
         )
 
         assertEquals("Prioritize recovery today.", answer.response)
-        assertEquals(listOf("HRV is below baseline", "Resting heart rate is elevated"), answer.evidence?.signals)
-        assertEquals("The combined pattern suggests reduced recovery.", answer.evidence?.interpretation)
+        assertEquals(listOf("HRV is below baseline", "Resting heart rate is elevated"), answer.reasoning)
         assertEquals(3, answer.suggestions.size)
     }
 
     @Test
-    fun `parses older codex responses without evidence`() {
+    fun `parses older codex evidence as reasoning`() {
         val answer = parseCoachAnswer(
-            """{"response":"Take it easy.","suggestions":[]}""",
+            """{"response":"Take it easy.","evidence":{"signals":["HRV is low"],"interpretation":"Recovery is reduced."},"suggestions":[]}""",
         )
 
         assertEquals("Take it easy.", answer.response)
-        assertNull(answer.evidence)
+        assertEquals(listOf("HRV is low", "Recovery is reduced."), answer.reasoning)
+    }
+
+    @Test
+    fun `replaces malformed and ungrounded follow ups`() {
+        val questions = listOf(
+            "Did you eat or hydrate differently today?",
+            "Action: Drink water now",
+            "followUpQuestions__3_items_under_60_chars_each)",
+        ).validFollowUpQuestions()
+
+        assertEquals(3, questions.size)
+        assertFalse(questions.any { it.contains('_') || it.contains("you", ignoreCase = true) })
+        assertEquals("Which signal changed most for me?", questions.first())
     }
 
     @Test

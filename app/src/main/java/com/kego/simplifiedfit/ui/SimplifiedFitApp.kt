@@ -55,7 +55,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -804,22 +808,37 @@ private fun CoachScreen(
         }
         Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 22.dp)) {
             Spacer(Modifier.height(24.dp))
-            if (state.coachMessage != null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Text(
-                        state.coachMessage,
-                        color = FitColors.White,
-                        style = FitType.Body,
-                        modifier = Modifier.background(FitColors.Surface, RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp),
-                    )
-                }
+            state.coachTurns.forEach { turn ->
+                CoachQuestion(turn.question)
+                Spacer(Modifier.height(32.dp))
+                CoachThinkingBlock(
+                    phase = CoachPhase.COMPLETE,
+                    busy = false,
+                    reasoning = turn.reasoning,
+                    durationMs = turn.durationMs,
+                    expansionKey = turn,
+                )
+                Spacer(Modifier.height(20.dp))
+                CoachResponseText(turn.answer)
+                Spacer(Modifier.height(40.dp))
+                Rule()
+                Spacer(Modifier.height(40.dp))
             }
-            if (state.coachMessage != null) Spacer(Modifier.height(48.dp))
+            if (state.coachMessage != null) {
+                CoachQuestion(state.coachMessage)
+            }
+            if (state.coachMessage != null) Spacer(Modifier.height(32.dp))
             if (state.coachMessage != null && state.coachPhase != CoachPhase.IDLE) {
-                CoachThinkingBlock(state)
+                CoachThinkingBlock(
+                    phase = state.coachPhase,
+                    busy = state.coachBusy,
+                    reasoning = state.coachReasoning,
+                    durationMs = state.coachDurationMs,
+                    expansionKey = state.coachMessage,
+                )
                 state.coachReply?.takeIf(String::isNotBlank)?.let { reply ->
-                    Spacer(Modifier.height(24.dp))
-                    Text(reply, color = FitColors.White, style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp), modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(20.dp))
+                    CoachResponseText(reply)
                 }
                 state.coachError?.let { error ->
                     Spacer(Modifier.height(18.dp))
@@ -896,55 +915,110 @@ private fun CoachScreen(
 }
 
 @Composable
-private fun CoachThinkingBlock(state: AppUiState) {
-    var expanded by remember(state.coachMessage) { mutableStateOf(state.coachBusy) }
-    LaunchedEffect(state.coachPhase) {
-        expanded = when (state.coachPhase) {
+private fun CoachQuestion(question: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Text(
+            question,
+            color = FitColors.White,
+            style = FitType.Body,
+            modifier = Modifier.background(FitColors.Surface, RoundedCornerShape(22.dp)).padding(horizontal = 19.dp, vertical = 15.dp),
+        )
+    }
+}
+
+@Composable
+private fun CoachResponseText(response: String) {
+    Text(
+        coachMarkdown(response),
+        color = FitColors.White,
+        style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+internal fun coachMarkdown(text: String): AnnotatedString = buildAnnotatedString {
+    var index = 0
+    var bold = false
+    while (index < text.length) {
+        val marker = text.indexOf("**", index).takeIf { it >= 0 } ?: text.length
+        val segment = text.substring(index, marker)
+        if (bold) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(segment) } else append(segment)
+        if (marker == text.length) break
+        bold = !bold
+        index = marker + 2
+    }
+}
+
+@Composable
+private fun CoachThinkingBlock(
+    phase: CoachPhase,
+    busy: Boolean,
+    reasoning: List<String>,
+    durationMs: Long?,
+    expansionKey: Any,
+) {
+    var expanded by remember(expansionKey) { mutableStateOf(busy) }
+    LaunchedEffect(phase) {
+        expanded = when (phase) {
             CoachPhase.COMPLETE, CoachPhase.ERROR -> false
             else -> true
         }
     }
-    val canExpand = state.coachBusy || state.coachEvidence != null
-    val label = when (state.coachPhase) {
-        CoachPhase.COMPLETE -> "Thought for ${((state.coachDurationMs ?: 0L) / 1_000L).coerceAtLeast(1L)} seconds"
+    val canExpand = busy || reasoning.isNotEmpty()
+    val label = when (phase) {
+        CoachPhase.COMPLETE -> "Thought for ${((durationMs ?: 0L) / 1_000L).coerceAtLeast(1L)} seconds"
         CoachPhase.ERROR -> "Thinking interrupted"
         else -> "Thinking"
     }
     Row(
-        Modifier.clickable(enabled = canExpand) { expanded = !expanded }.padding(vertical = 5.dp),
+        Modifier.clickable(enabled = canExpand) { expanded = !expanded }.padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (expanded) "⌄" else "›", color = FitColors.Muted, fontSize = 21.sp)
-        Spacer(Modifier.width(10.dp))
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            if (phase == CoachPhase.ERROR) {
+                Box(Modifier.size(5.dp).background(FitColors.Coral, CircleShape))
+            } else {
+                CoachDisclosureArrow(expanded)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
         Text(label, color = FitColors.Muted, style = FitType.Body.copy(fontSize = 14.sp))
     }
     if (!expanded) return
 
-    if (state.coachPhase == CoachPhase.COMPLETE) {
-        state.coachEvidence?.let { evidence ->
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.padding(start = 8.dp).height(IntrinsicSize.Min)) {
-                Box(Modifier.width(1.dp).fillMaxHeight().background(FitColors.Rule))
-                Column(Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp)) {
-                    Text("SIGNALS USED", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
-                    Spacer(Modifier.height(8.dp))
-                    evidence.signals.forEach { signal ->
-                        Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
-                            Box(Modifier.padding(top = 7.dp).size(5.dp).background(FitColors.Green, CircleShape))
-                            Spacer(Modifier.width(9.dp))
-                            Text(signal, color = FitColors.White, style = FitType.Body.copy(fontSize = 13.sp), modifier = Modifier.weight(1f))
-                        }
+    if (phase == CoachPhase.COMPLETE) {
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.padding(start = 9.dp).height(IntrinsicSize.Min)) {
+            Box(Modifier.width(1.dp).fillMaxHeight().background(FitColors.Rule))
+            Column(Modifier.padding(start = 18.dp, top = 2.dp, bottom = 2.dp)) {
+                reasoning.forEachIndexed { index, step ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.padding(top = 8.dp).size(5.dp).background(FitColors.Green, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Text(step, color = FitColors.White, style = FitType.Body.copy(fontSize = 13.sp), modifier = Modifier.weight(1f))
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text("INTERPRETATION", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
-                    Spacer(Modifier.height(6.dp))
-                    Text(evidence.interpretation, color = FitColors.White, style = FitType.Body.copy(fontSize = 13.sp))
+                    if (index != reasoning.lastIndex) Spacer(Modifier.height(12.dp))
                 }
             }
         }
-    } else if (state.coachPhase != CoachPhase.ERROR) {
+    } else if (phase != CoachPhase.ERROR) {
         Spacer(Modifier.height(16.dp))
-        CoachProgressTimeline(state.coachPhase)
+        CoachProgressTimeline(phase)
+    }
+}
+
+@Composable
+private fun CoachDisclosureArrow(expanded: Boolean) {
+    val color = FitColors.Muted
+    Canvas(Modifier.size(14.dp)) {
+        val strokeWidth = 1.8.dp.toPx()
+        if (expanded) {
+            drawLine(color, Offset(size.width * .18f, size.height * .34f), Offset(size.width * .5f, size.height * .66f), strokeWidth, StrokeCap.Round)
+            drawLine(color, Offset(size.width * .5f, size.height * .66f), Offset(size.width * .82f, size.height * .34f), strokeWidth, StrokeCap.Round)
+        } else {
+            drawLine(color, Offset(size.width * .34f, size.height * .18f), Offset(size.width * .66f, size.height * .5f), strokeWidth, StrokeCap.Round)
+            drawLine(color, Offset(size.width * .66f, size.height * .5f), Offset(size.width * .34f, size.height * .82f), strokeWidth, StrokeCap.Round)
+        }
     }
 }
 

@@ -46,7 +46,7 @@ Credentials and refresh tokens are AES-GCM encrypted with an Android Keystore ke
 
 Open **Settings → Coach** and choose a provider:
 
-- **OpenRouter** calls the API directly from Android using `deepseek/deepseek-v4-flash`. Paste an OpenRouter API key and save it. The key is encrypted with Android Keystore and never sent to the Mac.
+- **OpenRouter** calls the API directly from Android using OpenRouter's `~deepseek/deepseek-v4-flash-latest` alias. Paste an OpenRouter API key and save it. The key is encrypted with Android Keystore and never sent to the Mac.
 - **Local Codex** uses the paired Mac companion and the already-authenticated Codex CLI. This mode does not require an API key, but the Mac must remain awake and reachable through Tailscale.
 
 OpenRouter streams responses as they are generated. The current Codex CLI integration returns its completed answer at once; both providers use the same progress and evidence UI.
