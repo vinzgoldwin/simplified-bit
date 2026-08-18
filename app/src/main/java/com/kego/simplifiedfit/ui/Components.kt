@@ -270,10 +270,11 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
             }
             FitIcon.MOON -> {
                 val moon = Path().apply {
-                    moveTo(w * .73f, h * .79f)
-                    cubicTo(w * .43f, h * .84f, w * .18f, h * .63f, w * .18f, h * .35f)
-                    cubicTo(w * .18f, h * .18f, w * .27f, h * .07f, w * .39f, h * .02f)
-                    cubicTo(w * .28f, h * .38f, w * .48f, h * .71f, w * .73f, h * .79f)
+                    moveTo(w * .82f, h * .53f)
+                    cubicTo(w * .82f, h * .75f, w * .64f, h * .88f, w * .45f, h * .84f)
+                    cubicTo(w * .22f, h * .80f, w * .10f, h * .58f, w * .14f, h * .37f)
+                    cubicTo(w * .17f, h * .20f, w * .30f, h * .10f, w * .45f, h * .10f)
+                    cubicTo(w * .43f, h * .34f, w * .58f, h * .51f, w * .82f, h * .53f)
                     close()
                 }
                 drawPath(moon, color, style = stroke)

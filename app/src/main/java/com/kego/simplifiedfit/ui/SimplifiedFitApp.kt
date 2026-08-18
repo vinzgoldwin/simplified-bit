@@ -269,7 +269,7 @@ private fun WhoopOverview(snapshot: HealthSnapshot) {
         Box(Modifier.size(142.dp), contentAlignment = Alignment.Center) {
             val track = FitColors.Track
             val readiness = FitColors.Green
-            val sleep = FitColors.Cyan
+            val steps = FitColors.Cyan
             Canvas(Modifier.fillMaxSize()) {
                 val stroke = 8.dp.toPx()
                 val inset = stroke / 2f + 4.dp.toPx()
@@ -279,7 +279,8 @@ private fun WhoopOverview(snapshot: HealthSnapshot) {
                 val innerInset = inset + 13.dp.toPx()
                 val innerSize = androidx.compose.ui.geometry.Size(size.width - innerInset * 2, size.height - innerInset * 2)
                 drawArc(track, -90f, 360f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx()))
-                drawArc(sleep, -90f, snapshot.sleepScore.coerceIn(0, 100) * 3.6f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Butt))
+                val stepProgress = (snapshot.steps / 10_000f).coerceIn(0f, 1f)
+                drawArc(steps, -90f, stepProgress * 360f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Butt))
             }
             Text("S/F", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 13.sp, letterSpacing = 0.sp))
         }
