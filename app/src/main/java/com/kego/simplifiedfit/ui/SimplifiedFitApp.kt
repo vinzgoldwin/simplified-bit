@@ -215,7 +215,7 @@ private fun TodayScreen(
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             val openReadiness = { onDetail(Detail.READINESS) }
-            WhoopOverview(snapshot, onReadiness = openReadiness)
+            WhoopOverview(snapshot)
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 13.dp),
                 horizontalArrangement = Arrangement.Center,
@@ -246,7 +246,7 @@ private fun TodayScreen(
 }
 
 @Composable
-private fun WhoopOverview(snapshot: HealthSnapshot, onReadiness: () -> Unit) {
+private fun WhoopOverview(snapshot: HealthSnapshot) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 17.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -259,7 +259,7 @@ private fun WhoopOverview(snapshot: HealthSnapshot, onReadiness: () -> Unit) {
             Text(metricValue(snapshot.hrv), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text("HRV", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp))
         }
-        Box(Modifier.size(142.dp).clickable(onClick = onReadiness), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(142.dp), contentAlignment = Alignment.Center) {
             val track = FitColors.Track
             val readiness = FitColors.Green
             val sleep = FitColors.Cyan
