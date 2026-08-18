@@ -6,10 +6,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.kego.simplifiedfit.SimplifiedFitApplication
 import com.kego.simplifiedfit.data.CoachClient
 import com.kego.simplifiedfit.data.CoachConnection
-import com.kego.simplifiedfit.data.CoachEvent
 import com.kego.simplifiedfit.data.CoachProgress
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.data.CoachRequest
@@ -17,21 +18,19 @@ import com.kego.simplifiedfit.data.DailyHealth
 import com.kego.simplifiedfit.data.GoogleCredentials
 import com.kego.simplifiedfit.data.GoogleHealthClient
 import com.kego.simplifiedfit.data.GoogleSetupCredentials
-import com.kego.simplifiedfit.data.OpenRouterCoachClient
 import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import com.kego.simplifiedfit.domain.SleepSignals
+import com.kego.simplifiedfit.sync.CoachRequestWorker
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.roundToInt
 
 enum class CoachPhase { IDLE, CONTEXT_READY, ANALYZING, WRITING, COMPLETE, ERROR }
@@ -82,6 +81,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val local = app.healthRepository.recent()
         if (local.isNotEmpty()) state = state.copy(snapshot = local.toSnapshot())
         if (state.googleConnected) sync()
+        app.secureStore.currentCoachJobId()
+            ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?.let(::observeCoachWork)
     }
 
     fun sync() {
@@ -205,6 +207,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var previousCoachQuestion: String? = null
     private var previousCoachAnswer: String? = null
+    private var coachObservation: Job? = null
 
     fun askCoach(message: String) {
         val trimmedMessage = message.trim()
@@ -233,11 +236,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startCoach(message: String, turns: List<CoachTurn>) {
-        val backend = when (state.coachProvider) {
-            CoachProvider.CODEX -> app.secureStore.coachConnection()?.let(::CoachClient)
-            CoachProvider.OPENROUTER -> app.secureStore.openRouterApiKey()?.let(::OpenRouterCoachClient)
+        val configured = when (state.coachProvider) {
+            CoachProvider.CODEX -> app.secureStore.coachConnection() != null
+            CoachProvider.OPENROUTER -> app.secureStore.openRouterApiKey() != null
         }
-        if (backend == null) {
+        if (!configured) {
             val error = when (state.coachProvider) {
                 CoachProvider.CODEX -> "Pair the Mac companion in Settings first."
                 CoachProvider.OPENROUTER -> "Add your OpenRouter API key in Settings first."
@@ -266,63 +269,102 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             coachError = null,
             coachRetryable = false,
         )
-        viewModelScope.launch {
-            runCatching {
-                coroutineScope {
-                    // Start the request immediately, but keep the first milestone visible long enough to register.
-                    val events = backend.ask(
-                        CoachRequest(
-                            message = message,
-                            healthContext = state.snapshot.coachContext,
-                            previousQuestion = previousCoachQuestion,
-                            previousAnswer = previousCoachAnswer,
-                        ),
-                    ).buffer(Channel.UNLIMITED).produceIn(this)
-
-                    delay(CONTEXT_READY_DISPLAY_MS)
-                    for (event in events) {
-                        state = when (event) {
-                            is CoachEvent.Progress -> state.copy(
-                                coachPhase = when (event.stage) {
-                                    CoachProgress.CONTEXT_READY -> CoachPhase.CONTEXT_READY
-                                    CoachProgress.ANALYZING -> CoachPhase.ANALYZING
-                                    CoachProgress.WRITING -> CoachPhase.WRITING
-                                },
-                            )
-                            is CoachEvent.ResponseDelta -> state.copy(
-                                coachReply = state.coachReply.orEmpty() + event.text,
-                                coachPhase = CoachPhase.WRITING,
-                            )
-                            is CoachEvent.Complete -> state.copy(
-                                coachBusy = false,
-                                coachReply = event.answer.response,
-                                coachSuggestions = event.answer.suggestions,
-                                coachReasoning = event.answer.reasoning,
-                                coachDurationMs = event.durationMs,
-                                coachPhase = CoachPhase.COMPLETE,
-                                coachError = null,
-                                coachRetryable = false,
-                                coachConnected = if (state.coachProvider == CoachProvider.CODEX) true else state.coachConnected,
-                            )
-                        }
-                    }
-                }
-            }.onFailure {
+        val request = CoachRequest(
+            message = message,
+            healthContext = state.snapshot.coachContext,
+            previousQuestion = previousCoachQuestion,
+            previousAnswer = previousCoachAnswer,
+        )
+        runCatching { CoachRequestWorker.enqueue(app, state.coachProvider, request) }
+            .onSuccess(::observeCoachWork)
+            .onFailure {
                 state = state.copy(
                     coachBusy = false,
-                    coachReply = state.coachReply?.takeIf(String::isNotEmpty),
-                    coachSuggestions = emptyList(),
                     coachPhase = CoachPhase.ERROR,
                     coachError = it.message ?: "Coach unavailable",
                     coachRetryable = true,
                 )
             }
+    }
+
+    private fun observeCoachWork(id: UUID) {
+        coachObservation?.cancel()
+        coachObservation = viewModelScope.launch {
+            WorkManager.getInstance(app).getWorkInfoByIdFlow(id).collectLatest { info ->
+                val workInfo = info ?: return@collectLatest
+                val (provider, request) = app.secureStore.coachJob(id.toString()) ?: return@collectLatest
+                state = when (workInfo.state) {
+                    WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> state.copy(
+                        coachMessage = request.message,
+                        coachReply = null,
+                        coachSuggestions = emptyList(),
+                        coachBusy = true,
+                        coachProvider = provider,
+                        coachPhase = state.coachPhase.takeIf {
+                            state.coachMessage == request.message && it in ACTIVE_COACH_PHASES
+                        } ?: CoachPhase.CONTEXT_READY,
+                        coachReasoning = emptyList(),
+                        coachDurationMs = null,
+                        coachError = null,
+                        coachRetryable = false,
+                    )
+                    WorkInfo.State.RUNNING -> state.copy(
+                        coachMessage = request.message,
+                        coachReply = null,
+                        coachBusy = true,
+                        coachProvider = provider,
+                        coachPhase = workInfo.progress.getString(CoachRequestWorker.KEY_PHASE)
+                            ?.let { runCatching { CoachProgress.valueOf(it) }.getOrNull() }
+                            ?.toCoachPhase()
+                            ?: CoachPhase.ANALYZING,
+                        coachError = null,
+                        coachRetryable = false,
+                    )
+                    WorkInfo.State.SUCCEEDED -> app.secureStore.coachJobResult(id.toString())?.let { (answer, duration) ->
+                        state.copy(
+                            coachMessage = request.message,
+                            coachBusy = false,
+                            coachReply = answer.response,
+                            coachSuggestions = answer.suggestions,
+                            coachReasoning = answer.reasoning,
+                            coachDurationMs = duration,
+                            coachProvider = provider,
+                            coachPhase = CoachPhase.COMPLETE,
+                            coachError = null,
+                            coachRetryable = false,
+                            coachConnected = if (provider == CoachProvider.CODEX) true else state.coachConnected,
+                        )
+                    } ?: state.copy(
+                        coachBusy = false,
+                        coachPhase = CoachPhase.ERROR,
+                        coachError = "Coach result was unavailable",
+                        coachRetryable = true,
+                    )
+                    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> state.copy(
+                        coachMessage = request.message,
+                        coachBusy = false,
+                        coachReply = null,
+                        coachSuggestions = emptyList(),
+                        coachProvider = provider,
+                        coachPhase = CoachPhase.ERROR,
+                        coachError = workInfo.outputData.getString(CoachRequestWorker.KEY_ERROR)
+                            ?: "Coach request interrupted",
+                        coachRetryable = true,
+                    )
+                }
+            }
         }
     }
 
+    private fun CoachProgress.toCoachPhase(): CoachPhase = when (this) {
+        CoachProgress.CONTEXT_READY -> CoachPhase.CONTEXT_READY
+        CoachProgress.ANALYZING -> CoachPhase.ANALYZING
+        CoachProgress.WRITING -> CoachPhase.WRITING
+    }
+
     private companion object {
-        const val CONTEXT_READY_DISPLAY_MS = 1_000L
         const val MAX_VISIBLE_COACH_TURNS = 8
+        val ACTIVE_COACH_PHASES = setOf(CoachPhase.CONTEXT_READY, CoachPhase.ANALYZING, CoachPhase.WRITING)
     }
 
     private fun List<DailyHealth>.toSnapshot(): HealthSnapshot {

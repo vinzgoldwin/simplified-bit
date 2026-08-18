@@ -4,6 +4,8 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -97,6 +99,64 @@ class SecureStore(context: Context) {
         preferences.edit().putString("coach_provider", provider.name).apply()
     }
 
+    fun saveCoachJob(id: String, provider: CoachProvider, request: CoachRequest) {
+        val previousId = currentCoachJobId()
+        val payload = JSONObject()
+            .put("provider", provider.name)
+            .put("message", request.message)
+            .put("healthContext", request.healthContext)
+            .put("previousQuestion", request.previousQuestion)
+            .put("previousAnswer", request.previousAnswer)
+        put(coachJobKey(id), payload.toString())
+        preferences.edit().putString(CURRENT_COACH_JOB_ID, id).apply()
+        if (previousId != null && previousId != id) clearCoachJob(previousId)
+    }
+
+    fun coachJob(id: String): Pair<CoachProvider, CoachRequest>? = get(coachJobKey(id))?.let { text ->
+        runCatching {
+            val json = JSONObject(text)
+            CoachProvider.valueOf(json.getString("provider")) to CoachRequest(
+                message = json.getString("message"),
+                healthContext = json.getString("healthContext"),
+                previousQuestion = json.optString("previousQuestion").takeIf(String::isNotBlank),
+                previousAnswer = json.optString("previousAnswer").takeIf(String::isNotBlank),
+            )
+        }.getOrNull()
+    }
+
+    fun currentCoachJobId(): String? = preferences.getString(CURRENT_COACH_JOB_ID, null)
+
+    fun saveCoachJobResult(id: String, answer: CoachAnswer, durationMs: Long) {
+        val payload = JSONObject()
+            .put("response", answer.response)
+            .put("reasoning", JSONArray(answer.reasoning))
+            .put("suggestions", JSONArray(answer.suggestions))
+            .put("durationMs", durationMs)
+        put(coachJobResultKey(id), payload.toString())
+    }
+
+    fun coachJobResult(id: String): Pair<CoachAnswer, Long>? = get(coachJobResultKey(id))?.let { text ->
+        runCatching {
+            val json = JSONObject(text)
+            fun strings(name: String): List<String> = json.getJSONArray(name).let { array ->
+                (0 until array.length()).map(array::getString)
+            }
+            CoachAnswer(
+                response = json.getString("response"),
+                reasoning = strings("reasoning"),
+                suggestions = strings("suggestions"),
+            ) to json.getLong("durationMs")
+        }.getOrNull()
+    }
+
+    private fun clearCoachJob(id: String) {
+        preferences.edit().remove(coachJobKey(id)).remove(coachJobResultKey(id)).apply()
+    }
+
+    private fun coachJobKey(id: String) = "coach_job_$id"
+
+    private fun coachJobResultKey(id: String) = "coach_job_result_$id"
+
     private fun put(name: String, value: String) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
@@ -129,6 +189,7 @@ class SecureStore(context: Context) {
     }
 
     private companion object {
+        const val CURRENT_COACH_JOB_ID = "current_coach_job_id"
         const val KEY_ALIAS = "simplified_fit_credentials"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
     }

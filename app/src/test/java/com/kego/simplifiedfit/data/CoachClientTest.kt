@@ -42,7 +42,7 @@ class CoachClientTest {
 
         assertEquals(3, questions.size)
         assertFalse(questions.any { it.contains('_') || it.contains("you", ignoreCase = true) })
-        assertEquals("Which signal changed most for me?", questions.first())
+        assertEquals("What stands out most for me?", questions.first())
     }
 
     @Test

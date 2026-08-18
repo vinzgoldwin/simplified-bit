@@ -60,9 +60,9 @@ internal fun parseCoachAnswer(text: String): CoachAnswer {
 
 internal fun List<String>.validFollowUpQuestions(): List<String> {
     val fallback = listOf(
-        "Which signal changed most for me?",
-        "What should I monitor tomorrow?",
-        "How should I adjust my day?",
+        "What stands out most for me?",
+        "Is this normal for me?",
+        "What should I keep an eye on?",
     )
     val valid = map(String::trim).filter { question ->
         question.length in 8..60 &&
@@ -274,7 +274,7 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
                         "suggestions",
                         JSONObject()
                             .put("type", "array")
-                            .put("description", "Exactly three grounded first-person questions the user can send next. Never actions, labels, placeholders, nutrition, or hydration topics.")
+                            .put("description", "Exactly three natural, conversational first-person questions the user can send next. Use simple everyday language. Never actions, labels, placeholders, nutrition, or hydration topics.")
                             .put("items", JSONObject().put("type", "string"))
                             .put("minItems", 3)
                             .put("maxItems", 3),
@@ -306,7 +306,7 @@ internal fun coachPrompt(request: CoachRequest): String {
 
         Provide a concise reasoning summary as two to four short steps explaining how the supplied signals support the answer. This is a user-facing summary, not private chain-of-thought.
 
-        Also provide exactly three distinct follow-up questions, each under 60 characters. Write them exactly as the user would send them, using first-person wording such as I, me, or my. They must be questions answerable only from the supplied health summary and conversation. Never suggest or ask about food, meals, drinks, or hydration because those details are not supplied. Do not put actions, monitoring instructions, schema labels, placeholders, or field names in the follow-up list.
+        Also provide exactly three distinct follow-up questions, each under 60 characters. Write them exactly as the user would naturally ask them in a conversation, using first-person wording such as I, me, or my. Keep them simple, warm, and direct. Avoid clinical or analytical terms such as signal, baseline, monitor, interpretation, or advice unless the user already used them. They must be questions answerable only from the supplied health summary and conversation. Never suggest or ask about food, meals, drinks, or hydration because those details are not supplied. Do not put actions, instructions, schema labels, placeholders, or field names in the follow-up list.
 
         HEALTH SUMMARY
         ${request.healthContext}

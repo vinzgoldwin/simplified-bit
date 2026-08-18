@@ -3,6 +3,11 @@ package com.kego.simplifiedfit.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,6 +58,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -76,6 +82,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 @Composable
 fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
@@ -821,15 +828,15 @@ private fun CoachScreen(
     var followOutput by remember(state.coachMessage) { mutableStateOf(true) }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val starterSuggestions = listOf(
-        "What should I prioritize today?",
-        "What changed from my baseline?",
-        "What patterns stand out this week?",
+        "What should I focus on today?",
+        "How am I doing compared to usual?",
+        "Is there anything I should pay attention to?",
     )
     val followUpQuestions = state.coachSuggestions.takeIf { it.size == 3 } ?: run {
         listOf(
-            "Which signal mattered most?",
-            "What should I monitor tomorrow?",
-            "What could change this advice?",
+            "What stands out most for me?",
+            "Is this normal for me?",
+            "What should I keep an eye on?",
         )
     }
     val suggestions = when {
@@ -851,13 +858,18 @@ private fun CoachScreen(
     LaunchedEffect(state.coachReply, state.coachPhase) {
         if (followOutput) scrollState.scrollTo(scrollState.maxValue)
     }
-    val providerStatus = when (state.coachProvider) {
-        CoachProvider.CODEX -> if (state.coachConnected) "Mac · Codex" else "Mac offline"
-        CoachProvider.OPENROUTER -> if (state.openRouterConfigured) "OpenRouter · DeepSeek V4 Flash" else "OpenRouter key needed"
-    }
     val providerReady = when (state.coachProvider) {
         CoachProvider.CODEX -> state.coachConnected
         CoachProvider.OPENROUTER -> state.openRouterConfigured
+    }
+    val connectionStatus = when {
+        providerReady -> "Ready"
+        state.coachProvider == CoachProvider.CODEX -> "Offline"
+        else -> "Setup needed"
+    }
+    val coachModel = when (state.coachProvider) {
+        CoachProvider.CODEX -> "Local Codex"
+        CoachProvider.OPENROUTER -> "DeepSeek V4 Flash"
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -873,17 +885,23 @@ private fun CoachScreen(
                 OutlineIcon(FitIcon.SETTINGS, FitColors.White, 21.dp)
             }
         }
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onSettings).padding(horizontal = 22.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(6.dp).background(if (providerReady) FitColors.Green else FitColors.Muted, CircleShape))
+            Spacer(Modifier.width(7.dp))
+            Text(
+                connectionStatus,
+                color = if (providerReady) FitColors.White else FitColors.Muted,
+                style = FitType.Body.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+            )
+            Text(" · ", color = FitColors.Muted, style = FitType.Body.copy(fontSize = 11.sp))
+            Text(coachModel, color = FitColors.Muted, style = FitType.Body.copy(fontSize = 11.sp))
+        }
         Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 22.dp)) {
-            Row(
-                Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("COACH CONNECTION", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.weight(1f))
-                Box(Modifier.size(8.dp).background(if (providerReady) FitColors.Green else FitColors.Muted, CircleShape))
-                Spacer(Modifier.width(8.dp))
-                Text(providerStatus.uppercase(), color = if (providerReady) FitColors.Green else FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp))
-            }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             state.coachTurns.forEach { turn ->
                 CoachQuestion(turn.question)
                 Spacer(Modifier.height(32.dp))
@@ -1073,6 +1091,10 @@ private fun CoachThinkingBlock(
         }
         Spacer(Modifier.width(8.dp))
         Text(label, color = FitColors.Muted, style = FitType.Body.copy(fontSize = 14.sp))
+        if (busy && phase != CoachPhase.COMPLETE && phase != CoachPhase.ERROR) {
+            Spacer(Modifier.width(8.dp))
+            CoachProgressDots()
+        }
     }
     if (!expanded) return
 
@@ -1094,6 +1116,29 @@ private fun CoachThinkingBlock(
     } else if (phase != CoachPhase.ERROR) {
         Spacer(Modifier.height(16.dp))
         CoachProgressTimeline(phase)
+    }
+}
+
+@Composable
+private fun CoachProgressDots() {
+    val transition = rememberInfiniteTransition(label = "coach progress")
+    val cycle = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 1_150, easing = LinearEasing)),
+        label = "progress dot cycle",
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(3) { index ->
+            Box(
+                Modifier.size(4.dp).graphicsLayer {
+                    val phase = (cycle.value - index * .13f + 1f) % 1f
+                    val bounce = if (phase < .52f) sin(phase / .52f * Math.PI).toFloat() else 0f
+                    translationY = -4.dp.toPx() * bounce
+                    alpha = .35f + .65f * bounce
+                }.background(FitColors.Green, CircleShape),
+            )
+        }
     }
 }
 
