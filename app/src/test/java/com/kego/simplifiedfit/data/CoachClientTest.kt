@@ -2,6 +2,7 @@ package com.kego.simplifiedfit.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoachClientTest {
@@ -58,5 +59,35 @@ class CoachClientTest {
         val prefix = "{\"response\":\"HRV " + "\\" + "u"
         assertEquals("HRV ", decodedResponsePrefix(prefix))
         assertEquals("HRV ↓", decodedResponsePrefix(prefix + "2193"))
+    }
+
+    @Test
+    fun `asks for short scannable markdown responses`() {
+        val prompt = coachPrompt(
+            CoachRequest(
+                message = "How am I doing?",
+                healthContext = "Readiness: 90/100",
+            ),
+        )
+
+        assertTrue(prompt.contains("Lead with the main takeaway"))
+        assertTrue(prompt.contains("Default to no more than 120 words"))
+        assertTrue(prompt.contains("use a Markdown bullet list"))
+        assertTrue(prompt.contains("Bold only important numbers and recommended actions"))
+    }
+
+    @Test
+    fun `asks for a natural supportive coaching voice`() {
+        val prompt = coachPrompt(
+            CoachRequest(
+                message = "What should I focus on today?",
+                healthContext = "Readiness: 90/100",
+            ),
+        )
+
+        assertTrue(prompt.contains("trusted coach in a real conversation"))
+        assertTrue(prompt.contains("supportive, practical choices rather than commands"))
+        assertTrue(prompt.contains("Never shame, lecture, exaggerate, or use generic praise"))
+        assertTrue(prompt.contains("Avoid canned openings"))
     }
 }
