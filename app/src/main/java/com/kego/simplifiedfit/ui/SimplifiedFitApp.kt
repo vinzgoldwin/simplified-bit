@@ -66,6 +66,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -213,7 +214,8 @@ private fun TodayScreen(
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            WhoopOverview(snapshot, onDetail)
+            val openReadiness = { onDetail(Detail.READINESS) }
+            WhoopOverview(snapshot, onReadiness = openReadiness)
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 13.dp),
                 horizontalArrangement = Arrangement.Center,
@@ -228,7 +230,7 @@ private fun TodayScreen(
                     title = "YOUR DAILY BASELINE",
                     body = "Readiness combines sleep, HRV, and resting heart rate to show how prepared you are today.",
                     action = "VIEW READINESS",
-                    onClick = { onDetail(Detail.READINESS) },
+                    onClick = openReadiness,
                 )
                 SectionLabel("Today's signals", topPadding = 22.dp, bottomPadding = 9.dp)
                 WhoopMetricCard("SLEEP", formatSleepMinutes(snapshot.sleepMinutes), "${snapshot.sleepScore}% performance", FitIcon.MOON) { onDetail(Detail.SLEEP) }
@@ -244,7 +246,7 @@ private fun TodayScreen(
 }
 
 @Composable
-private fun WhoopOverview(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) {
+private fun WhoopOverview(snapshot: HealthSnapshot, onReadiness: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 17.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -257,7 +259,7 @@ private fun WhoopOverview(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) 
             Text(metricValue(snapshot.hrv), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text("HRV", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp))
         }
-        Box(Modifier.size(142.dp).clickable { onDetail(Detail.READINESS) }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(142.dp).clickable(onClick = onReadiness), contentAlignment = Alignment.Center) {
             val track = FitColors.Track
             val readiness = FitColors.Green
             val sleep = FitColors.Cyan
@@ -491,7 +493,6 @@ private fun HealthMetricDetail(
                 Spacer(Modifier.width(5.dp))
                 Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp), modifier = Modifier.padding(bottom = 4.dp))
             }
-            Rule()
         }
     }
 }
@@ -962,10 +963,16 @@ private fun CoachScreen(
                         style = FitType.Eyebrow.copy(fontSize = 9.sp, letterSpacing = 1.sp),
                         modifier = Modifier.width(28.dp),
                     )
-                    Text(suggestion, color = FitColors.White, style = FitType.Body.copy(fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text(
+                        suggestion,
+                        color = FitColors.White,
+                        style = FitType.Body.copy(fontSize = 14.sp),
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text("›", color = FitColors.Muted, fontSize = 22.sp)
                 }
-                Rule()
             }
         }
         Row(
