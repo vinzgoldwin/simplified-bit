@@ -330,7 +330,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     WorkInfo.State.RUNNING -> state.copy(
                         coachMessage = request.message,
-                        coachReply = null,
+                        coachReply = workInfo.progress.getString(CoachRequestWorker.KEY_PARTIAL_RESPONSE)
+                            ?.takeIf(String::isNotEmpty)
+                            ?: state.coachReply.takeIf { state.coachMessage == request.message },
                         coachBusy = true,
                         coachProvider = provider,
                         coachPhase = workInfo.progress.getString(CoachRequestWorker.KEY_PHASE)

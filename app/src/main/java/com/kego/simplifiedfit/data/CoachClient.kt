@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.flowOn
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.nio.charset.StandardCharsets
 
@@ -122,8 +123,8 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
 
         val http = URL(OPENROUTER_URL).openConnection() as HttpURLConnection
         http.requestMethod = "POST"
-        http.connectTimeout = 15_000
-        http.readTimeout = 120_000
+        http.connectTimeout = CONNECT_TIMEOUT_MS
+        http.readTimeout = READ_TIMEOUT_MS
         http.doOutput = true
         http.setRequestProperty("Authorization", "Bearer $apiKey")
         http.setRequestProperty("Content-Type", "application/json")
@@ -148,6 +149,9 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         http.inputStream.bufferedReader().use { reader ->
             while (true) {
                 val line = reader.readLine() ?: break
+                if (System.currentTimeMillis() - startedAt >= REQUEST_TIMEOUT_MS) {
+                    throw SocketTimeoutException("Coach took too long to respond. Try again.")
+                }
                 val data = line.takeIf { it.startsWith("data:") }
                     ?.removePrefix("data:")
                     ?.trimStart()
@@ -179,8 +183,7 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
             }
         }
 
-        val answer = runCatching { parseCoachAnswer(structured.toString()) }
-            .getOrElse { healedAnswer(request) }
+        val answer = parseCoachAnswer(structured.toString())
         val remaining = when {
             answer.response.startsWith(emittedResponse) -> answer.response.removePrefix(emittedResponse)
             else -> answer.response
@@ -193,38 +196,10 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         emit(CoachEvent.Complete(answer, System.currentTimeMillis() - startedAt))
     }.flowOn(Dispatchers.IO)
 
-    private fun healedAnswer(request: CoachRequest): CoachAnswer {
-        val http = URL(OPENROUTER_URL).openConnection() as HttpURLConnection
-        http.requestMethod = "POST"
-        http.connectTimeout = 15_000
-        http.readTimeout = 120_000
-        http.doOutput = true
-        http.setRequestProperty("Authorization", "Bearer $apiKey")
-        http.setRequestProperty("Content-Type", "application/json")
-        http.setRequestProperty("X-Title", "Simplified Fit")
-        val payload = openRouterPayload(request, stream = false)
-            .put("plugins", JSONArray().put(JSONObject().put("id", "response-healing")))
-        http.outputStream.use { output ->
-            output.write(payload.toString().toByteArray(StandardCharsets.UTF_8))
-        }
-        val body = (if (http.responseCode in 200..299) http.inputStream else http.errorStream)
-            .bufferedReader()
-            .use { it.readText() }
-        if (http.responseCode !in 200..299) {
-            val message = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }.getOrNull()
-            error(message?.takeIf(String::isNotBlank) ?: "OpenRouter retry failed (${http.responseCode})")
-        }
-        val content = JSONObject(body)
-            .getJSONArray("choices")
-            .getJSONObject(0)
-            .getJSONObject("message")
-            .getString("content")
-        return parseCoachAnswer(content)
-    }
-
     private fun openRouterPayload(request: CoachRequest, stream: Boolean): JSONObject = JSONObject()
         .put("model", MODEL)
         .put("stream", stream)
+        .put("max_tokens", 800)
         .put("reasoning", JSONObject().put("effort", "low"))
         .put(
             "messages",
@@ -249,6 +224,9 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
     private companion object {
         const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val MODEL = "~deepseek/deepseek-v4-flash-latest"
+        const val CONNECT_TIMEOUT_MS = 10_000
+        const val READ_TIMEOUT_MS = 45_000
+        const val REQUEST_TIMEOUT_MS = 60_000L
 
         val OUTPUT_SCHEMA = JSONObject()
             .put("type", "object")
