@@ -29,19 +29,19 @@ private data class FitColorPalette(
 )
 
 private val DarkFitColors = FitColorPalette(
-    background = Color(0xFF000000),
-    surface = Color(0xFF090A0B),
-    rule = Color(0xFF292B2D),
-    track = Color(0xFF242628),
-    content = Color(0xFFF5F5F2),
-    muted = Color(0xFF969A9D),
-    green = Color(0xFFB7F34A),
-    violet = Color(0xFFA88BFF),
+    background = Color(0xFF080D0F),
+    surface = Color(0xFF2A3032),
+    rule = Color(0xFF424A4D),
+    track = Color(0xFF343C3F),
+    content = Color(0xFFF7F8F7),
+    muted = Color(0xFF969FA2),
+    green = Color(0xFF00E6A7),
+    violet = Color(0xFF87A9FF),
     stageAwake = Color(0xFF6448D6),
     stageDeep = Color(0xFF3458C8),
     stageRem = Color(0xFF8ED8D8),
-    cyan = Color(0xFF42D9F5),
-    coral = Color(0xFFFF766F),
+    cyan = Color(0xFF21B9EC),
+    coral = Color(0xFFFF5B63),
 )
 
 private val LightFitColors = DarkFitColors.copy(
@@ -74,9 +74,9 @@ object FitColors {
 object FitType {
     val Eyebrow = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
-        letterSpacing = 1.8.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.sp,
+        letterSpacing = 1.5.sp,
     )
     val Display = TextStyle(
         fontFamily = FontFamily.SansSerif,

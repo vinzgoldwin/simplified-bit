@@ -22,6 +22,11 @@ import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import com.kego.simplifiedfit.domain.SleepSignals
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -263,37 +268,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
         viewModelScope.launch {
             runCatching {
-                backend.ask(
-                    CoachRequest(
-                        message = message,
-                        healthContext = state.snapshot.coachContext,
-                        previousQuestion = previousCoachQuestion,
-                        previousAnswer = previousCoachAnswer,
-                    ),
-                ).collect { event ->
-                    state = when (event) {
-                        is CoachEvent.Progress -> state.copy(
-                            coachPhase = when (event.stage) {
-                                CoachProgress.CONTEXT_READY -> CoachPhase.CONTEXT_READY
-                                CoachProgress.ANALYZING -> CoachPhase.ANALYZING
-                                CoachProgress.WRITING -> CoachPhase.WRITING
-                            },
-                        )
-                        is CoachEvent.ResponseDelta -> state.copy(
-                            coachReply = state.coachReply.orEmpty() + event.text,
-                            coachPhase = CoachPhase.WRITING,
-                        )
-                        is CoachEvent.Complete -> state.copy(
-                            coachBusy = false,
-                            coachReply = event.answer.response,
-                            coachSuggestions = event.answer.suggestions,
-                            coachReasoning = event.answer.reasoning,
-                            coachDurationMs = event.durationMs,
-                            coachPhase = CoachPhase.COMPLETE,
-                            coachError = null,
-                            coachRetryable = false,
-                            coachConnected = if (state.coachProvider == CoachProvider.CODEX) true else state.coachConnected,
-                        )
+                coroutineScope {
+                    // Start the request immediately, but keep the first milestone visible long enough to register.
+                    val events = backend.ask(
+                        CoachRequest(
+                            message = message,
+                            healthContext = state.snapshot.coachContext,
+                            previousQuestion = previousCoachQuestion,
+                            previousAnswer = previousCoachAnswer,
+                        ),
+                    ).buffer(Channel.UNLIMITED).produceIn(this)
+
+                    delay(CONTEXT_READY_DISPLAY_MS)
+                    for (event in events) {
+                        state = when (event) {
+                            is CoachEvent.Progress -> state.copy(
+                                coachPhase = when (event.stage) {
+                                    CoachProgress.CONTEXT_READY -> CoachPhase.CONTEXT_READY
+                                    CoachProgress.ANALYZING -> CoachPhase.ANALYZING
+                                    CoachProgress.WRITING -> CoachPhase.WRITING
+                                },
+                            )
+                            is CoachEvent.ResponseDelta -> state.copy(
+                                coachReply = state.coachReply.orEmpty() + event.text,
+                                coachPhase = CoachPhase.WRITING,
+                            )
+                            is CoachEvent.Complete -> state.copy(
+                                coachBusy = false,
+                                coachReply = event.answer.response,
+                                coachSuggestions = event.answer.suggestions,
+                                coachReasoning = event.answer.reasoning,
+                                coachDurationMs = event.durationMs,
+                                coachPhase = CoachPhase.COMPLETE,
+                                coachError = null,
+                                coachRetryable = false,
+                                coachConnected = if (state.coachProvider == CoachProvider.CODEX) true else state.coachConnected,
+                            )
+                        }
                     }
                 }
             }.onFailure {
@@ -310,6 +321,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private companion object {
+        const val CONTEXT_READY_DISPLAY_MS = 1_000L
         const val MAX_VISIBLE_COACH_TURNS = 8
     }
 

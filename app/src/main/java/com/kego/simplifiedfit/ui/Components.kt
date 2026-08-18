@@ -132,9 +132,13 @@ fun MetricRow(
     icon: FitIcon,
     onClick: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 4.dp)
+            .background(FitColors.Surface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+    ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 17.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlineIcon(icon, color)
@@ -144,11 +148,10 @@ fun MetricRow(
             Spacer(Modifier.width(5.dp))
             Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
         }
-        Rule(Modifier.padding(horizontal = 22.dp))
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, BACK, SEND, CLOCK, WAVES, LOTUS, CALENDAR }
+enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR }
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -253,26 +256,15 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                     drawPath(path, color, style = stroke)
                 }
             }
-            FitIcon.LOTUS -> {
-                val left = Path().apply {
-                    moveTo(w * .50f, h * .82f)
-                    cubicTo(w * .32f, h * .78f, w * .13f, h * .58f, w * .10f, h * .35f)
-                    cubicTo(w * .32f, h * .42f, w * .47f, h * .61f, w * .50f, h * .82f)
+            FitIcon.MOON -> {
+                val moon = Path().apply {
+                    moveTo(w * .73f, h * .79f)
+                    cubicTo(w * .43f, h * .84f, w * .18f, h * .63f, w * .18f, h * .35f)
+                    cubicTo(w * .18f, h * .18f, w * .27f, h * .07f, w * .39f, h * .02f)
+                    cubicTo(w * .28f, h * .38f, w * .48f, h * .71f, w * .73f, h * .79f)
+                    close()
                 }
-                val center = Path().apply {
-                    moveTo(w * .50f, h * .82f)
-                    cubicTo(w * .34f, h * .58f, w * .39f, h * .25f, w * .50f, h * .08f)
-                    cubicTo(w * .61f, h * .25f, w * .66f, h * .58f, w * .50f, h * .82f)
-                }
-                val right = Path().apply {
-                    moveTo(w * .50f, h * .82f)
-                    cubicTo(w * .68f, h * .78f, w * .87f, h * .58f, w * .90f, h * .35f)
-                    cubicTo(w * .68f, h * .42f, w * .53f, h * .61f, w * .50f, h * .82f)
-                }
-                drawPath(left, color, style = stroke)
-                drawPath(center, color, style = stroke)
-                drawPath(right, color, style = stroke)
-                drawLine(color, Offset(w * .10f, h * .83f), Offset(w * .90f, h * .83f), stroke.width, StrokeCap.Round)
+                drawPath(moon, color, style = stroke)
             }
             FitIcon.CALENDAR -> {
                 drawRoundRect(color, Offset(w * .12f, h * .18f), Size(w * .76f, h * .70f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .08f), style = stroke)
@@ -314,11 +306,13 @@ fun DataRow(
     color: Color = FitColors.White,
     onClick: (() -> Unit)? = null,
 ) {
-    val modifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
+    val modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        .background(FitColors.Surface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+        .let { if (onClick == null) it else it.clickable(onClick = onClick) }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
-            Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(5.dp))
                 Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp), modifier = Modifier.padding(bottom = 3.dp))
@@ -328,7 +322,6 @@ fun DataRow(
                 Text("›", color = color, fontSize = 24.sp, modifier = Modifier.padding(bottom = 1.dp))
             }
         }
-        Rule()
     }
 }
 

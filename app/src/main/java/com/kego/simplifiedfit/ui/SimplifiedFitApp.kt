@@ -97,7 +97,7 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         }
 
         Box(Modifier.fillMaxSize().background(FitColors.Black)) {
-            MatteTexture()
+            MatteTexture(settings)
             when {
                 settings -> SettingsScreen(
                     viewModel = viewModel,
@@ -105,6 +105,10 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     darkTheme = darkTheme,
                     onToggleTheme = { darkTheme = !darkTheme },
                     onBack = { settings = false },
+                    onDestination = {
+                        settings = false
+                        destination = it
+                    },
                 )
                 detail != null -> DetailScreen(
                     detail = detail!!,
@@ -132,6 +136,7 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     onAsk = viewModel::askCoach,
                     onRetry = viewModel::retryCoach,
                     onDestination = { destination = it },
+                    onSettings = { settings = true },
                 )
             }
         }
@@ -139,29 +144,20 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
 }
 
 @Composable
-private fun MatteTexture() {
-    val surfaceColor = FitColors.Surface
+private fun MatteTexture(settings: Boolean) {
     val backgroundColor = FitColors.Black
     Canvas(Modifier.fillMaxSize()) {
         drawRect(
-            Brush.radialGradient(
-                colors = listOf(surfaceColor, backgroundColor),
-                center = Offset(size.width * .28f, size.height * .08f),
-                radius = maxOf(size.width, size.height) * .95f,
+            Brush.verticalGradient(
+                colors = if (settings) {
+                    listOf(backgroundColor, Color(0xFF142024), Color(0xFF45555D))
+                } else {
+                    listOf(Color(0xFF28363C), Color(0xFF141C1F), backgroundColor)
+                },
+                startY = 0f,
+                endY = if (settings) size.height else size.height * .78f,
             ),
         )
-        val spacing = 31.dp.toPx()
-        var y = 0f
-        var row = 0
-        while (y < size.height) {
-            var x = if (row % 2 == 0) 7.dp.toPx() else 18.dp.toPx()
-            while (x < size.width) {
-                drawCircle(Color.White.copy(alpha = .035f), .65.dp.toPx(), Offset(x, y))
-                x += spacing
-            }
-            y += spacing * .73f
-            row++
-        }
     }
 }
 
@@ -207,48 +203,124 @@ private fun TodayScreen(
     onDestination: (Destination) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text("TODAY", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 24.sp, letterSpacing = 2.2.sp))
-                Spacer(Modifier.height(18.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).background(FitColors.Cyan, CircleShape))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Synced ${snapshot.lastSync}", color = FitColors.Muted, fontSize = 16.sp)
-                }
-            }
-            Box(Modifier.size(48.dp).clickable(onClick = onSettings), contentAlignment = Alignment.TopEnd) {
-                OutlineIcon(FitIcon.SETTINGS, FitColors.White, 26.dp)
+        Row(
+            Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.size(42.dp).clickable(onClick = onSettings), contentAlignment = Alignment.CenterEnd) {
+                OutlineIcon(FitIcon.SETTINGS, FitColors.White, 21.dp)
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            WhoopOverview(snapshot, onDetail)
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 27.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                Modifier.fillMaxWidth().padding(bottom = 13.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ScoreRing(
-                    (snapshot.steps / 100f).toInt(),
-                    "Steps",
-                    FitColors.Cyan,
-                    size = 144.dp,
-                    valueText = snapshot.steps.formatted(),
-                ) { onDetail(Detail.STEPS) }
-                ScoreRing(snapshot.sleepScore, "Sleep", FitColors.Violet, size = 144.dp) { onDetail(Detail.SLEEP) }
+                Text("DATA SYNCED AT ${snapshot.lastSync}", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = 1.2.sp))
+                Spacer(Modifier.width(6.dp))
+                Box(Modifier.size(6.dp).background(FitColors.Green, CircleShape))
             }
-            Rule(Modifier.padding(horizontal = 22.dp))
-            MetricRow("Readiness", snapshot.readiness.toString(), "score", FitColors.Green, FitIcon.TODAY) { onDetail(Detail.READINESS) }
-            MetricRow("Heart rate", snapshot.latestHeartRate.toString(), "bpm", FitColors.Coral, FitIcon.HEART) { onDetail(Detail.HEART) }
-            MetricRow("Calories", snapshot.totalCalories.formatted(), "kcal", FitColors.Cyan, FitIcon.FIRE) { onDetail(Detail.CALORIES) }
+            Column(Modifier.padding(horizontal = 15.dp)) {
+                WhoopInfoCard(
+                    title = "YOUR DAILY BASELINE",
+                    body = "Readiness combines sleep, HRV, and resting heart rate to show how prepared you are today.",
+                    action = "VIEW READINESS",
+                    onClick = { onDetail(Detail.READINESS) },
+                )
+                SectionLabel("Today's signals", topPadding = 22.dp, bottomPadding = 9.dp)
+                WhoopMetricCard("SLEEP", formatSleepMinutes(snapshot.sleepMinutes), "${snapshot.sleepScore}% performance", FitIcon.MOON) { onDetail(Detail.SLEEP) }
+                Spacer(Modifier.height(8.dp))
+                WhoopMetricCard("STEPS", snapshot.steps.formatted(), "${snapshot.totalCalories.formatted()} kcal today", FitIcon.STEPS) { onDetail(Detail.STEPS) }
+                Spacer(Modifier.height(8.dp))
+                WhoopMetricCard("HEART RATE", "${snapshot.latestHeartRate} bpm", "${snapshot.restingHeartRate} bpm resting", FitIcon.HEART) { onDetail(Detail.HEART) }
+                Spacer(Modifier.height(18.dp))
+            }
         }
         BottomNav(Destination.TODAY, onDestination)
     }
 }
 
 @Composable
-private fun BottomNav(selected: Destination, onDestination: (Destination) -> Unit) {
-    Column(Modifier.navigationBarsPadding()) {
+private fun WhoopOverview(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 17.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Column(Modifier.width(74.dp), horizontalAlignment = Alignment.End) {
+            Text("${snapshot.readiness}%", color = FitColors.Green, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("READINESS", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 7.sp))
+            Spacer(Modifier.height(14.dp))
+            Text(metricValue(snapshot.hrv), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("HRV", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp))
+        }
+        Box(Modifier.size(142.dp).clickable { onDetail(Detail.READINESS) }, contentAlignment = Alignment.Center) {
+            val track = FitColors.Track
+            val readiness = FitColors.Green
+            val sleep = FitColors.Cyan
+            Canvas(Modifier.fillMaxSize()) {
+                val stroke = 8.dp.toPx()
+                val inset = stroke / 2f + 4.dp.toPx()
+                val ringSize = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2)
+                drawArc(track, -90f, 360f, false, Offset(inset, inset), ringSize, style = Stroke(stroke))
+                drawArc(readiness, -90f, snapshot.readiness.coerceIn(0, 100) * 3.6f, false, Offset(inset, inset), ringSize, style = Stroke(stroke, cap = StrokeCap.Butt))
+                val innerInset = inset + 13.dp.toPx()
+                val innerSize = androidx.compose.ui.geometry.Size(size.width - innerInset * 2, size.height - innerInset * 2)
+                drawArc(track, -90f, 360f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx()))
+                drawArc(sleep, -90f, snapshot.sleepScore.coerceIn(0, 100) * 3.6f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Butt))
+            }
+            Text("S/F", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 13.sp, letterSpacing = 0.sp))
+        }
+        Column(Modifier.width(74.dp)) {
+            Text(snapshot.steps.formatted(), color = FitColors.Cyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("STEPS", color = FitColors.Cyan, style = FitType.Eyebrow.copy(fontSize = 7.sp))
+            Spacer(Modifier.height(14.dp))
+            Text("${snapshot.sleepScore}%", color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("SLEEP", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp))
+        }
+    }
+}
+
+@Composable
+private fun WhoopInfoCard(title: String, body: String, action: String, onClick: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(15.dp),
+    ) {
+        Text(title, color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
+        Spacer(Modifier.height(8.dp))
+        Text(body, color = FitColors.White, style = FitType.Body.copy(fontSize = 12.sp, lineHeight = 17.sp))
+        Spacer(Modifier.height(11.dp))
+        Text("$action  ›", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+    }
+}
+
+@Composable
+private fun WhoopMetricCard(label: String, value: String, supporting: String, icon: FitIcon, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlineIcon(icon, FitColors.Muted, 20.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+            Spacer(Modifier.height(3.dp))
+            Text(supporting, color = FitColors.Muted, fontSize = 10.sp)
+        }
+        Text(value, color = FitColors.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(7.dp))
+        Text("›", color = FitColors.White, fontSize = 22.sp)
+    }
+}
+
+@Composable
+private fun BottomNav(selected: Destination?, onDestination: (Destination) -> Unit) {
+    Column(Modifier.background(Color(0xFF080D0F)).navigationBarsPadding()) {
         Rule()
-        Row(Modifier.fillMaxWidth().height(66.dp)) {
+        Row(Modifier.fillMaxWidth().height(67.dp)) {
             NavItem("Today", FitIcon.CALENDAR, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
             NavItem("Coach", FitIcon.COACH, selected == Destination.COACH, Modifier.weight(1f)) { onDestination(Destination.COACH) }
         }
@@ -617,8 +689,8 @@ private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
         SleepBreakdownItem("Duration", breakdown.duration, FitIcon.CLOCK),
         SleepBreakdownItem("Restfulness", breakdown.continuity, FitIcon.WAVES),
         breakdown.restlessness?.let { SleepBreakdownItem("Restlessness", it, FitIcon.WAVES) },
-        breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.LOTUS) },
-        breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.LOTUS) },
+        breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.MOON) },
+        breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.MOON) },
     )
     if (items.isEmpty()) {
         Text("Not enough sleep data to calculate a breakdown.", color = FitColors.Muted, style = FitType.Body)
@@ -749,15 +821,16 @@ private fun CoachScreen(
     onAsk: (String) -> Unit,
     onRetry: () -> Unit,
     onDestination: (Destination) -> Unit,
+    onSettings: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     var followOutput by remember(state.coachMessage) { mutableStateOf(true) }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val starterSuggestions = listOf(
-        "What should I prioritize today?" to FitColors.Green,
-        "What changed from my baseline?" to FitColors.Violet,
-        "What patterns stand out this week?" to FitColors.Cyan,
+        "What should I prioritize today?",
+        "What changed from my baseline?",
+        "What patterns stand out this week?",
     )
     val followUpQuestions = state.coachSuggestions.takeIf { it.size == 3 } ?: run {
         listOf(
@@ -766,10 +839,9 @@ private fun CoachScreen(
             "What could change this advice?",
         )
     }
-    val followUpSuggestions = followUpQuestions.zip(listOf(FitColors.Green, FitColors.Violet, FitColors.Cyan))
     val suggestions = when {
         state.coachBusy -> emptyList()
-        state.coachPhase == CoachPhase.COMPLETE -> followUpSuggestions
+        state.coachPhase == CoachPhase.COMPLETE -> followUpQuestions
         state.coachMessage == null -> starterSuggestions
         else -> emptyList()
     }
@@ -795,19 +867,30 @@ private fun CoachScreen(
         CoachProvider.OPENROUTER -> state.openRouterConfigured
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text("COACH", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 24.sp, letterSpacing = 2.2.sp))
-                Spacer(Modifier.height(13.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).background(if (providerReady) FitColors.Green else FitColors.Muted, CircleShape))
-                    Spacer(Modifier.width(10.dp))
-                    Text(providerStatus, color = if (providerReady) FitColors.Green else FitColors.Muted, fontSize = 16.sp)
-                }
+        Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(42.dp))
+            Text(
+                "COACH",
+                color = FitColors.White,
+                style = FitType.Eyebrow.copy(fontSize = 12.sp, letterSpacing = 1.8.sp),
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+            Box(Modifier.size(42.dp).clickable(onClick = onSettings), contentAlignment = Alignment.CenterEnd) {
+                OutlineIcon(FitIcon.SETTINGS, FitColors.White, 21.dp)
             }
         }
         Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 22.dp)) {
-            Spacer(Modifier.height(24.dp))
+            Row(
+                Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("COACH CONNECTION", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.weight(1f))
+                Box(Modifier.size(8.dp).background(if (providerReady) FitColors.Green else FitColors.Muted, CircleShape))
+                Spacer(Modifier.width(8.dp))
+                Text(providerStatus.uppercase(), color = if (providerReady) FitColors.Green else FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp))
+            }
+            Spacer(Modifier.height(20.dp))
             state.coachTurns.forEach { turn ->
                 CoachQuestion(turn.question)
                 Spacer(Modifier.height(32.dp))
@@ -853,40 +936,44 @@ private fun CoachScreen(
                         )
                     }
                 }
-            } else if (state.coachMessage == null) {
+            } else if (state.coachMessage == null && !providerReady) {
                 Text(
                     when (state.coachProvider) {
-                        CoachProvider.OPENROUTER -> if (state.openRouterConfigured) {
-                            "Ask a question about your health."
-                        } else {
-                            "Add your OpenRouter API key in Settings to start."
-                        }
-                        CoachProvider.CODEX -> if (state.coachConnected) {
-                            "Ask a question about your health."
-                        } else {
-                            "Pair the Mac companion to start a conversation."
-                        }
+                        CoachProvider.OPENROUTER -> "Add your OpenRouter API key in Settings to start."
+                        CoachProvider.CODEX -> "Pair the Mac companion to start a conversation."
                     },
                     color = FitColors.Muted,
                     style = FitType.Body.copy(fontSize = 16.sp, lineHeight = 25.sp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(16.dp),
                 )
             }
             if (suggestions.isNotEmpty()) {
-                Spacer(Modifier.height(36.dp)); Rule(); Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(28.dp))
+                Rule()
             }
-            suggestions.forEach { (suggestion, color) ->
-                Row(Modifier.fillMaxWidth().clickable { input = suggestion }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SuggestionMark(color); Spacer(Modifier.width(18.dp))
-                    Text(suggestion, color = FitColors.White, style = FitType.Body, modifier = Modifier.weight(1f))
-                    Text("›", color = FitColors.White, fontSize = 28.sp)
+            suggestions.forEachIndexed { index, suggestion ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { input = suggestion }.padding(horizontal = 3.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        (index + 1).toString().padStart(2, '0'),
+                        color = FitColors.Muted,
+                        style = FitType.Eyebrow.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+                        modifier = Modifier.width(28.dp),
+                    )
+                    Text(suggestion, color = FitColors.White, style = FitType.Body.copy(fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text("›", color = FitColors.Muted, fontSize = 22.sp)
                 }
                 Rule()
             }
         }
         Row(
-            Modifier.fillMaxWidth().imePadding().padding(horizontal = 18.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.Bottom,
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = 18.dp, vertical = 11.dp)
+                .background(Color(0xFF090E10), RoundedCornerShape(12.dp))
+                .border(1.dp, FitColors.Rule, RoundedCornerShape(12.dp))
+                .padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
                 value = input,
@@ -898,7 +985,7 @@ private fun CoachScreen(
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { sendMessage() }),
-                modifier = Modifier.weight(1f).border(1.dp, FitColors.Rule, RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 13.dp),
+                modifier = Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 7.dp),
                 decorationBox = { inner ->
                     Box {
                         if (input.isBlank()) Text("Ask about your health", color = FitColors.Muted, style = FitType.Body)
@@ -906,8 +993,13 @@ private fun CoachScreen(
                     }
                 },
             )
-            Box(Modifier.size(48.dp).clickable(enabled = !state.coachBusy) { sendMessage() }.background(FitColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
-                OutlineIcon(FitIcon.SEND, if (input.isBlank()) FitColors.Muted else FitColors.Green, 23.dp)
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(42.dp).background(if (input.isBlank()) FitColors.Surface else FitColors.Green, RoundedCornerShape(8.dp))
+                    .clickable(enabled = !state.coachBusy && input.isNotBlank()) { sendMessage() },
+                contentAlignment = Alignment.Center,
+            ) {
+                OutlineIcon(FitIcon.SEND, if (input.isBlank()) FitColors.Muted else FitColors.Black, 21.dp)
             }
         }
         if (!imeVisible) BottomNav(Destination.COACH, onDestination)
@@ -965,10 +1057,11 @@ private fun CoachThinkingBlock(
         }
     }
     val canExpand = busy || reasoning.isNotEmpty()
+    val durationSeconds = ((durationMs ?: 0L) / 1_000L).coerceAtLeast(1L)
     val label = when (phase) {
-        CoachPhase.COMPLETE -> "Thought for ${((durationMs ?: 0L) / 1_000L).coerceAtLeast(1L)} seconds"
-        CoachPhase.ERROR -> "Thinking interrupted"
-        else -> "Thinking"
+        CoachPhase.COMPLETE -> if (reasoning.isNotEmpty()) "Why this answer · ${durationSeconds}s" else "Generated in ${durationSeconds}s"
+        CoachPhase.ERROR -> "Coach request interrupted"
+        else -> "Coach progress"
     }
     Row(
         Modifier.clickable(enabled = canExpand) { expanded = !expanded }.padding(vertical = 6.dp),
@@ -1032,16 +1125,16 @@ private fun CoachProgressTimeline(phase: CoachPhase) {
         else -> 0
     }
     val labels = listOf(
-        if (activeIndex == 0) "Reading today’s health summary" else "Read today’s health summary",
+        "Health data attached",
         when {
-            activeIndex < 1 -> "Compare signals with your baselines"
-            activeIndex == 1 -> "Comparing signals with your baselines"
-            else -> "Compared signals with your baselines"
+            activeIndex < 1 -> "Wait for Coach"
+            activeIndex == 1 -> "Waiting for Coach"
+            else -> "Coach responded"
         },
         when {
-            activeIndex < 2 -> "Prepare your recommendation"
-            activeIndex == 2 -> "Preparing your recommendation"
-            else -> "Prepared your recommendation"
+            activeIndex < 2 -> "Receive response"
+            activeIndex == 2 -> "Receiving response"
+            else -> "Response received"
         },
     )
     Column(Modifier.padding(start = 8.dp)) {
@@ -1086,7 +1179,7 @@ private fun CoachProgressRow(label: String, done: Boolean, active: Boolean, last
     }
 }
 
-@Composable private fun SuggestionMark(color: Color) { Canvas(Modifier.size(31.dp)) { drawCircle(color, size.minDimension * .43f, center = Offset(size.width / 2, size.height / 2), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))) } }
+private enum class SettingsPage { INDEX, GOOGLE_HEALTH, APPEARANCE, COACH, PRIVACY }
 
 @Composable
 private fun SettingsScreen(
@@ -1095,92 +1188,241 @@ private fun SettingsScreen(
     darkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onBack: () -> Unit,
+    onDestination: (Destination) -> Unit,
 ) {
     val context = LocalContext.current
     val savedSetup = remember { viewModel.googleSetupCredentials() }
+    var page by rememberSaveable { mutableStateOf(SettingsPage.INDEX) }
     var clientId by remember { mutableStateOf(savedSetup?.clientId.orEmpty()) }
     var clientSecret by remember { mutableStateOf(savedSetup?.clientSecret.orEmpty()) }
     var authorizationCode by remember { mutableStateOf("") }
     var pairing by remember { mutableStateOf("") }
     var openRouterKey by remember { mutableStateOf("") }
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val title = when (page) {
+        SettingsPage.INDEX -> "APP SETTINGS"
+        SettingsPage.GOOGLE_HEALTH -> "GOOGLE HEALTH"
+        SettingsPage.APPEARANCE -> "APPEARANCE"
+        SettingsPage.COACH -> "COACH"
+        SettingsPage.PRIVACY -> "PRIVACY & DATA"
+    }
+    val closePage = {
+        if (page == SettingsPage.INDEX) onBack() else page = SettingsPage.INDEX
+    }
+    BackHandler(page != SettingsPage.INDEX) { page = SettingsPage.INDEX }
+
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        AppHeader("Settings", onBack = onBack)
-        Rule(Modifier.padding(horizontal = 22.dp))
-        Column(Modifier.padding(horizontal = 22.dp).imePadding().verticalScroll(rememberScrollState())) {
-            SectionLabel("Google Health")
-            DataRow("Status", if (state.googleConnected) "Connected" else "Not connected", color = if (state.googleConnected) FitColors.Green else FitColors.White)
-            DataRow("Sync", "Every 6 hours")
-            DataRow("Storage", "30 days")
-            if (!state.googleConnected) {
-                SetupField("WEB CLIENT ID", clientId) { clientId = it }
-                SetupField("CLIENT SECRET", clientSecret, secure = true) { clientSecret = it }
-                SettingsAction("SAVE & OPEN GOOGLE CONSENT", FitColors.Cyan, onClick = {
-                    viewModel.prepareGoogleAuthorization(clientId, clientSecret)?.let { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
-                })
-                SetupField("PASTE REDIRECT URL OR CODE", authorizationCode) { authorizationCode = it }
-                SettingsAction(
-                    label = if (state.syncing) "CONNECTING GOOGLE HEALTH…" else "CONNECT GOOGLE HEALTH",
-                    color = FitColors.Green,
-                    onClick = { viewModel.connectGoogle(clientId, clientSecret, authorizationCode) },
-                    loading = state.syncing,
-                )
-            } else {
-                SettingsAction(if (state.syncing) "SYNCING…" else "SYNC NOW", FitColors.Cyan, viewModel::sync)
-                SettingsAction("DISCONNECT", FitColors.Coral, viewModel::disconnectGoogle)
-            }
-            SectionLabel("Appearance")
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("THEME", color = FitColors.White, style = FitType.Eyebrow)
-                    Spacer(Modifier.height(6.dp))
-                    Text(if (darkTheme) "Dark" else "Light", color = FitColors.Muted, fontSize = 14.sp)
+        SettingsHeader(title, closePage)
+        Column(
+            Modifier.weight(1f).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+        ) {
+            when (page) {
+                SettingsPage.INDEX -> {
+                    Spacer(Modifier.height(27.dp))
+                    SettingsMenuRow(FitIcon.TODAY, "GOOGLE HEALTH", if (state.googleConnected) "Connected · syncs every 6 hours" else "Not connected") { page = SettingsPage.GOOGLE_HEALTH }
+                    Spacer(Modifier.height(9.dp))
+                    SettingsMenuRow(FitIcon.COACH, "COACH", if (state.coachProvider == CoachProvider.OPENROUTER) "OpenRouter · DeepSeek V4 Flash" else "Local Codex") { page = SettingsPage.COACH }
+                    Spacer(Modifier.height(9.dp))
+                    SettingsMenuRow(FitIcon.SETTINGS, "APPEARANCE", if (darkTheme) "Dark theme" else "Light theme") { page = SettingsPage.APPEARANCE }
+                    Spacer(Modifier.height(9.dp))
+                    SettingsMenuRow(FitIcon.WAVES, "PRIVACY & DATA", "30 days stored on device") { page = SettingsPage.PRIVACY }
+                    SectionLabel("About", topPadding = 30.dp, bottomPadding = 11.dp)
+                    SettingsMenuRow(FitIcon.MOON, "SCORES & METHODOLOGY", "How readiness and sleep are calculated") { page = SettingsPage.PRIVACY }
+                    Text(
+                        "SIMPLIFIED FIT  ·  VERSION 0.1.0",
+                        color = FitColors.Muted,
+                        style = FitType.Eyebrow.copy(fontSize = 8.sp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 31.dp, bottom = 24.dp),
+                        textAlign = TextAlign.Center,
+                    )
                 }
-                Switch(
-                    checked = darkTheme,
-                    onCheckedChange = { onToggleTheme() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = FitColors.Black,
-                        checkedTrackColor = FitColors.Green,
-                        uncheckedThumbColor = FitColors.White,
-                        uncheckedTrackColor = FitColors.Track,
-                        uncheckedBorderColor = Color.Transparent,
-                    ),
+
+                SettingsPage.GOOGLE_HEALTH -> {
+                    SettingsStateLine("CONNECTION", if (state.googleConnected) "CONNECTED" else "NOT CONNECTED", state.googleConnected)
+                    SectionLabel("Data source", topPadding = 25.dp, bottomPadding = 10.dp)
+                    SettingsValueRow("STATUS", if (state.googleConnected) "Connected" else "Not connected")
+                    Spacer(Modifier.height(8.dp))
+                    SettingsValueRow("SYNC SCHEDULE", "Every 6 hours")
+                    Spacer(Modifier.height(8.dp))
+                    SettingsValueRow("HISTORY", "30 days")
+                    if (!state.googleConnected) {
+                        SectionLabel("Connection details", topPadding = 25.dp, bottomPadding = 0.dp)
+                        SetupField("WEB CLIENT ID", clientId) { clientId = it }
+                        SetupField("CLIENT SECRET", clientSecret, secure = true) { clientSecret = it }
+                        SettingsAction("SAVE & OPEN GOOGLE CONSENT", FitColors.White, onClick = {
+                            viewModel.prepareGoogleAuthorization(clientId, clientSecret)?.let { url ->
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        })
+                        SetupField("PASTE REDIRECT URL OR CODE", authorizationCode) { authorizationCode = it }
+                        SettingsAction(
+                            label = if (state.syncing) "CONNECTING…" else "CONNECT GOOGLE HEALTH",
+                            color = FitColors.Green,
+                            onClick = { viewModel.connectGoogle(clientId, clientSecret, authorizationCode) },
+                            loading = state.syncing,
+                        )
+                    } else {
+                        Spacer(Modifier.height(24.dp))
+                        SettingsAction(if (state.syncing) "SYNCING…" else "SYNC NOW", FitColors.Green, viewModel::sync, state.syncing)
+                        SettingsAction("DISCONNECT", FitColors.Coral, viewModel::disconnectGoogle)
+                    }
+                }
+
+                SettingsPage.APPEARANCE -> {
+                    Spacer(Modifier.height(28.dp))
+                    Row(
+                        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("DARK THEME", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
+                            Spacer(Modifier.height(5.dp))
+                            Text(if (darkTheme) "On" else "Off", color = FitColors.Muted, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = darkTheme,
+                            onCheckedChange = { onToggleTheme() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = FitColors.White,
+                                checkedTrackColor = FitColors.Green,
+                                uncheckedThumbColor = FitColors.White,
+                                uncheckedTrackColor = FitColors.Track,
+                                uncheckedBorderColor = Color.Transparent,
+                            ),
+                        )
+                    }
+                    Text(
+                        "The dark theme matches the health dashboard and reduces glare at night.",
+                        color = FitColors.Muted,
+                        style = FitType.Body.copy(fontSize = 12.sp, lineHeight = 17.sp),
+                        modifier = Modifier.padding(top = 13.dp),
+                    )
+                }
+
+                SettingsPage.COACH -> {
+                    SettingsStateLine(
+                        "COACH CONNECTION",
+                        if (state.coachProvider == CoachProvider.OPENROUTER && state.openRouterConfigured || state.coachProvider == CoachProvider.CODEX && state.coachConnected) "READY" else "SETUP NEEDED",
+                        state.openRouterConfigured || state.coachConnected,
+                    )
+                    SectionLabel("Configuration", topPadding = 25.dp, bottomPadding = 10.dp)
+                    SettingsValueRow("PROVIDER", if (state.coachProvider == CoachProvider.OPENROUTER) "OpenRouter" else "Local Codex")
+                    if (state.coachProvider == CoachProvider.OPENROUTER) {
+                        Spacer(Modifier.height(8.dp))
+                        SettingsValueRow("MODEL", "DeepSeek V4 Flash")
+                        Spacer(Modifier.height(8.dp))
+                        SettingsValueRow("API KEY", if (state.openRouterConfigured) "Saved securely" else "Not configured")
+                        SetupField("OPENROUTER API KEY", openRouterKey, secure = true) { openRouterKey = it }
+                        SettingsAction("SAVE API KEY", FitColors.Green, onClick = {
+                            viewModel.saveOpenRouterApiKey(openRouterKey)
+                            openRouterKey = ""
+                        })
+                        if (state.openRouterConfigured) SettingsAction("REMOVE API KEY", FitColors.Coral, viewModel::clearOpenRouterApiKey)
+                        SettingsAction("USE LOCAL CODEX", FitColors.White, onClick = { viewModel.selectCoachProvider(CoachProvider.CODEX) })
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        SettingsValueRow("MAC COMPANION", if (state.coachConnected) "Connected" else "Not connected")
+                        Spacer(Modifier.height(8.dp))
+                        SettingsValueRow("NETWORK", "Tailscale")
+                        SetupField("PASTE PAIRING DETAILS", pairing) { pairing = it }
+                        SettingsAction("PAIR MAC COACH", FitColors.Green, onClick = { viewModel.pairCoach(pairing) })
+                        SettingsAction("USE OPENROUTER", FitColors.White, onClick = { viewModel.selectCoachProvider(CoachProvider.OPENROUTER) })
+                    }
+                }
+
+                SettingsPage.PRIVACY -> {
+                    Spacer(Modifier.height(28.dp))
+                    SettingsValueRow("HEALTH HISTORY", "30 days")
+                    Spacer(Modifier.height(8.dp))
+                    SettingsValueRow("PROCESSING", "On device")
+                    Spacer(Modifier.height(8.dp))
+                    SettingsValueRow("COACH CREDENTIALS", "Encrypted storage")
+                    SectionLabel("Scores", topPadding = 28.dp, bottomPadding = 10.dp)
+                    Column(Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(15.dp)) {
+                        Text("YOUR DATA STAYS YOURS", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
+                        Spacer(Modifier.height(9.dp))
+                        Text(
+                            "Readiness and sleep scores are calculated locally from your sleep, HRV, and resting heart-rate signals. They are not medical scores.",
+                            color = FitColors.White,
+                            style = FitType.Body.copy(fontSize = 12.sp, lineHeight = 18.sp),
+                        )
+                    }
+                }
+            }
+
+            state.setupMessage?.let {
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    it,
+                    color = if (it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted,
+                    style = FitType.Body.copy(fontSize = 12.sp),
                 )
             }
-            Rule()
-            SectionLabel("Coach")
-            DataRow("Provider", if (state.coachProvider == CoachProvider.OPENROUTER) "OpenRouter" else "Local Codex", color = FitColors.Green)
-            if (state.coachProvider == CoachProvider.OPENROUTER) {
-                DataRow("Model", "DeepSeek V4 Flash")
-                DataRow("Connection", "Direct from Android")
-                DataRow("API key", if (state.openRouterConfigured) "Saved securely" else "Not configured", color = if (state.openRouterConfigured) FitColors.Green else FitColors.White)
-                SetupField("OPENROUTER API KEY", openRouterKey, secure = true) { openRouterKey = it }
-                SettingsAction("SAVE OPENROUTER KEY", FitColors.Green, onClick = {
-                    viewModel.saveOpenRouterApiKey(openRouterKey)
-                    openRouterKey = ""
-                })
-                if (state.openRouterConfigured) SettingsAction("REMOVE OPENROUTER KEY", FitColors.Coral, viewModel::clearOpenRouterApiKey)
-                SettingsAction("USE LOCAL CODEX", FitColors.Cyan, onClick = { viewModel.selectCoachProvider(CoachProvider.CODEX) })
-            } else {
-                DataRow("Mac companion", if (state.coachConnected) "Connected" else "Not connected", color = if (state.coachConnected) FitColors.Green else FitColors.White)
-                DataRow("Network", "Tailscale")
-                SetupField("PASTE PAIRING DETAILS", pairing) { pairing = it }
-                SettingsAction("PAIR MAC COACH", FitColors.Green, onClick = { viewModel.pairCoach(pairing) })
-                SettingsAction("USE OPENROUTER", FitColors.Cyan, onClick = { viewModel.selectCoachProvider(CoachProvider.OPENROUTER) })
-            }
-            SectionLabel("Scores")
-            Text("Scores are calculated locally from Fitbit's sleep and readiness factors. They are not medical scores.", color = FitColors.Muted, style = FitType.Body)
-            state.setupMessage?.let {
-                Spacer(Modifier.height(20.dp))
-                Text(it, color = if (it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted, style = FitType.Body)
-            }
-            Spacer(Modifier.height(80.dp).navigationBarsPadding())
+            Spacer(Modifier.height(24.dp))
         }
+        if (!imeVisible) BottomNav(selected = null, onDestination = onDestination)
+    }
+}
+
+@Composable
+private fun SettingsHeader(title: String, onClose: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(42.dp).clickable(onClick = onClose), contentAlignment = Alignment.CenterStart) {
+            Text("×", color = FitColors.White, fontSize = 33.sp, fontWeight = FontWeight.Light)
+        }
+        Text(
+            title,
+            color = FitColors.White,
+            style = FitType.Eyebrow.copy(fontSize = 12.sp, letterSpacing = 1.8.sp),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.width(42.dp))
+    }
+}
+
+@Composable
+private fun SettingsMenuRow(icon: FitIcon, title: String, subtitle: String? = null, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlineIcon(icon, FitColors.Muted, 22.dp)
+        Spacer(Modifier.width(15.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
+            if (subtitle != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = FitColors.Muted, fontSize = 10.sp)
+            }
+        }
+        Text("›", color = FitColors.Muted, fontSize = 23.sp)
+    }
+}
+
+@Composable
+private fun SettingsStateLine(label: String, value: String, healthy: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(top = 22.dp), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = if (healthy) FitColors.Green else FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp))
+            Spacer(Modifier.height(4.dp))
+            Text(value, color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 12.sp))
+        }
+        Box(Modifier.size(8.dp).background(if (healthy) FitColors.Green else FitColors.Coral, CircleShape))
+    }
+}
+
+@Composable
+private fun SettingsValueRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.weight(1f))
+        Text(value, color = FitColors.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -1192,8 +1434,9 @@ private fun SetupField(label: String, value: String, secure: Boolean = false, on
     LaunchedEffect(focused, imeBottom) {
         if (focused && imeBottom > 0) bringIntoViewRequester.bringIntoView()
     }
-    Column(Modifier.fillMaxWidth().padding(top = 17.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
         Text(label, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 9.sp))
+        Spacer(Modifier.height(7.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -1203,11 +1446,11 @@ private fun SetupField(label: String, value: String, secure: Boolean = false, on
             visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier
                 .fillMaxWidth()
+                .background(FitColors.Surface, RoundedCornerShape(4.dp))
                 .bringIntoViewRequester(bringIntoViewRequester)
                 .onFocusChanged { focused = it.isFocused }
-                .padding(vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 13.dp),
         )
-        Rule()
     }
 }
 
@@ -1216,16 +1459,15 @@ private fun SettingsAction(label: String, color: Color, onClick: () -> Unit, loa
     Row(
         Modifier
             .fillMaxWidth()
+            .padding(top = 16.dp)
+            .border(1.dp, color, RoundedCornerShape(24.dp))
             .clickable(enabled = !loading, onClick = onClick)
-            .padding(vertical = 16.dp),
+            .padding(horizontal = 17.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = color, style = FitType.Eyebrow, modifier = Modifier.weight(1f))
+        Text(label, color = color, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
         if (loading) {
-            CircularProgressIndicator(Modifier.size(18.dp), color = color, strokeWidth = 2.dp)
-        } else {
-            Text("›", color = color, fontSize = 24.sp)
+            CircularProgressIndicator(Modifier.size(14.dp), color = color, strokeWidth = 2.dp)
         }
     }
-    Rule()
 }
