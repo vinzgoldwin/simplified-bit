@@ -89,7 +89,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             state = state.copy(syncing = true, setupMessage = null)
             runCatching { withContext(Dispatchers.IO) { app.healthRepository.sync() } }
-                .onSuccess { state = state.copy(snapshot = it.toSnapshot(), syncing = false, setupMessage = "Google Health synced") }
+                .onSuccess { state = state.copy(snapshot = it.toSnapshot(), syncing = false, setupMessage = null) }
                 .onFailure { state = state.copy(syncing = false, setupMessage = it.message ?: "Sync failed") }
         }
     }

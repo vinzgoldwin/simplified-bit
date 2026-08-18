@@ -151,7 +151,7 @@ fun MetricRow(
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR }
+enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR }
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -225,6 +225,23 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                 scale(pathScale, pathScale) {
                     drawPath(gear, color, style = gearStroke)
                     drawCircle(color, 8.2f, Offset(32f, 32f), style = gearStroke)
+                }
+            }
+            FitIcon.SUN -> {
+                drawCircle(color, w * .5f, Offset(w * .5f, h * .5f), style = stroke)
+                repeat(8) { index ->
+                    val angle = Math.toRadians(index * 45.0)
+                    val inner = w * .72f
+                    val outer = w * .92f
+                    val start = Offset(
+                        x = w * .5f + kotlin.math.cos(angle).toFloat() * inner / 2f,
+                        y = h * .5f + kotlin.math.sin(angle).toFloat() * inner / 2f,
+                    )
+                    val end = Offset(
+                        x = w * .5f + kotlin.math.cos(angle).toFloat() * outer / 2f,
+                        y = h * .5f + kotlin.math.sin(angle).toFloat() * outer / 2f,
+                    )
+                    drawLine(color, start, end, stroke.width, StrokeCap.Round)
                 }
             }
             FitIcon.BACK -> {

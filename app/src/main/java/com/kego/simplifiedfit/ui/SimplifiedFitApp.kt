@@ -360,7 +360,6 @@ private fun DetailScreen(
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         AppHeader(title, "Thu, 13 Aug", onBack = onBack)
-        Rule(Modifier.padding(horizontal = 22.dp))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             when (detail) {
                 Detail.READINESS -> ReadinessDetail(snapshot, onDetail)
@@ -1230,7 +1229,7 @@ private fun SettingsScreen(
                     Spacer(Modifier.height(9.dp))
                     SettingsMenuRow(FitIcon.COACH, "COACH", if (state.coachProvider == CoachProvider.OPENROUTER) "OpenRouter · DeepSeek V4 Flash" else "Local Codex") { page = SettingsPage.COACH }
                     Spacer(Modifier.height(9.dp))
-                    SettingsMenuRow(FitIcon.SETTINGS, "APPEARANCE", if (darkTheme) "Dark theme" else "Light theme") { page = SettingsPage.APPEARANCE }
+                    SettingsMenuRow(FitIcon.SUN, "APPEARANCE", if (darkTheme) "Dark theme" else "Light theme") { page = SettingsPage.APPEARANCE }
                     Spacer(Modifier.height(9.dp))
                     SettingsMenuRow(FitIcon.WAVES, "PRIVACY & DATA", "30 days stored on device") { page = SettingsPage.PRIVACY }
                     SectionLabel("About", topPadding = 30.dp, bottomPadding = 11.dp)
