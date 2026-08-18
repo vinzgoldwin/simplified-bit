@@ -2,12 +2,8 @@ package com.kego.simplifiedfit.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,7 +54,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -80,11 +75,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 @Composable
 fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
@@ -1080,10 +1075,21 @@ private fun CoachThinkingBlock(
     expansionKey: Any,
 ) {
     var expanded by remember(expansionKey) { mutableStateOf(busy) }
+    var elapsedSeconds by remember(expansionKey) { mutableStateOf(0L) }
     LaunchedEffect(phase) {
         expanded = when (phase) {
             CoachPhase.COMPLETE, CoachPhase.ERROR -> false
             else -> true
+        }
+    }
+    LaunchedEffect(busy, expansionKey) {
+        elapsedSeconds = 0L
+        if (!busy) return@LaunchedEffect
+
+        val startedAt = SystemClock.elapsedRealtime()
+        while (true) {
+            delay(1_000)
+            elapsedSeconds = (SystemClock.elapsedRealtime() - startedAt) / 1_000
         }
     }
     val canExpand = busy || reasoning.isNotEmpty()
@@ -1108,7 +1114,11 @@ private fun CoachThinkingBlock(
         Text(label, color = FitColors.Muted, style = FitType.Body.copy(fontSize = 14.sp))
         if (busy && phase != CoachPhase.COMPLETE && phase != CoachPhase.ERROR) {
             Spacer(Modifier.width(8.dp))
-            CoachProgressDots()
+            Text(
+                formatCoachElapsed(elapsedSeconds),
+                color = FitColors.Green,
+                style = FitType.Body.copy(fontSize = 12.sp),
+            )
         }
     }
     if (!expanded) return
@@ -1134,27 +1144,9 @@ private fun CoachThinkingBlock(
     }
 }
 
-@Composable
-private fun CoachProgressDots() {
-    val transition = rememberInfiniteTransition(label = "coach progress")
-    val cycle = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 1_150, easing = LinearEasing)),
-        label = "progress dot cycle",
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(3) { index ->
-            Box(
-                Modifier.size(4.dp).graphicsLayer {
-                    val phase = (cycle.value - index * .13f + 1f) % 1f
-                    val bounce = if (phase < .52f) sin(phase / .52f * Math.PI).toFloat() else 0f
-                    translationY = -4.dp.toPx() * bounce
-                    alpha = .35f + .65f * bounce
-                }.background(FitColors.Green, CircleShape),
-            )
-        }
-    }
+internal fun formatCoachElapsed(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    else -> "${seconds / 60}m ${seconds % 60}s"
 }
 
 @Composable

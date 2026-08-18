@@ -22,4 +22,12 @@ class CoachTextTest {
         assertEquals("Start gentle", rendered.text)
         assertEquals(FontWeight.Bold, rendered.spanStyles.single().item.fontWeight)
     }
+
+    @Test
+    fun `formats coach loading time as seconds then minutes`() {
+        assertEquals("0s", formatCoachElapsed(0))
+        assertEquals("59s", formatCoachElapsed(59))
+        assertEquals("1m 0s", formatCoachElapsed(60))
+        assertEquals("2m 5s", formatCoachElapsed(125))
+    }
 }
