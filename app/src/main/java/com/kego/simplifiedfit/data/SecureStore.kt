@@ -126,6 +126,11 @@ class SecureStore(context: Context) {
 
     fun currentCoachJobId(): String? = preferences.getString(CURRENT_COACH_JOB_ID, null)
 
+    fun clearCurrentCoachJob() {
+        currentCoachJobId()?.let(::clearCoachJob)
+        preferences.edit().remove(CURRENT_COACH_JOB_ID).apply()
+    }
+
     fun saveCoachJobResult(id: String, answer: CoachAnswer, durationMs: Long) {
         val payload = JSONObject()
             .put("response", answer.response)

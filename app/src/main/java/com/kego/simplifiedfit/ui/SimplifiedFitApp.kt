@@ -61,6 +61,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -143,6 +145,7 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     state = state,
                     onAsk = viewModel::askCoach,
                     onRetry = viewModel::retryCoach,
+                    onNewChat = viewModel::newCoachChat,
                     onDestination = { destination = it },
                     onSettings = { settings = true },
                 )
@@ -821,6 +824,7 @@ private fun CoachScreen(
     state: AppUiState,
     onAsk: (String) -> Unit,
     onRetry: () -> Unit,
+    onNewChat: () -> Unit,
     onDestination: (Destination) -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -874,7 +878,17 @@ private fun CoachScreen(
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.width(42.dp))
+            Box(
+                Modifier.size(42.dp)
+                    .semantics { contentDescription = "New chat" }
+                    .clickable(enabled = !state.coachBusy) {
+                        input = ""
+                        onNewChat()
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                OutlineIcon(FitIcon.ADD, if (state.coachBusy) FitColors.Muted else FitColors.Green, 20.dp)
+            }
             Text(
                 "COACH",
                 color = FitColors.White,

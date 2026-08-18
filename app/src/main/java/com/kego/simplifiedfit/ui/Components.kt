@@ -146,7 +146,7 @@ fun MetricRow(
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR }
+enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR, ADD }
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -289,6 +289,10 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                         drawCircle(color, w * .025f, Offset(w * (.30f + column * .20f), h * (.54f + row * .16f)))
                     }
                 }
+            }
+            FitIcon.ADD -> {
+                drawLine(color, Offset(w * .5f, h * .18f), Offset(w * .5f, h * .82f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .18f, h * .5f), Offset(w * .82f, h * .5f), stroke.width, StrokeCap.Round)
             }
         }
     }

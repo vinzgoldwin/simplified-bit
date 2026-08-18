@@ -235,6 +235,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         state.coachMessage?.let { startCoach(it, state.coachTurns) }
     }
 
+    fun newCoachChat() {
+        if (state.coachBusy) return
+        coachObservation?.cancel()
+        coachObservation = null
+        app.secureStore.clearCurrentCoachJob()
+        previousCoachQuestion = null
+        previousCoachAnswer = null
+        state = state.copy(
+            coachMessage = null,
+            coachReply = null,
+            coachSuggestions = emptyList(),
+            coachTurns = emptyList(),
+            coachPhase = CoachPhase.IDLE,
+            coachReasoning = emptyList(),
+            coachDurationMs = null,
+            coachError = null,
+            coachRetryable = false,
+        )
+    }
+
     private fun startCoach(message: String, turns: List<CoachTurn>) {
         val configured = when (state.coachProvider) {
             CoachProvider.CODEX -> app.secureStore.coachConnection() != null
