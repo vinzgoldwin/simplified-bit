@@ -253,7 +253,7 @@ private fun WhoopOverview(snapshot: HealthSnapshot) {
         horizontalArrangement = Arrangement.Center,
     ) {
         Column(Modifier.width(74.dp), horizontalAlignment = Alignment.End) {
-            Text("${snapshot.readiness}%", color = FitColors.Green, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(snapshot.readiness.toString(), color = FitColors.Green, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text("READINESS", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 7.sp))
             Spacer(Modifier.height(14.dp))
             Text(metricValue(snapshot.hrv), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -321,7 +321,6 @@ private fun WhoopMetricCard(label: String, value: String, supporting: String, ic
 @Composable
 private fun BottomNav(selected: Destination?, onDestination: (Destination) -> Unit) {
     Column(Modifier.background(Color(0xFF080D0F)).navigationBarsPadding()) {
-        Rule()
         Row(Modifier.fillMaxWidth().height(67.dp)) {
             NavItem("Today", FitIcon.CALENDAR, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
             NavItem("Coach", FitIcon.COACH, selected == Destination.COACH, Modifier.weight(1f)) { onDestination(Destination.COACH) }
@@ -382,7 +381,6 @@ private fun ReadinessDetail(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit
     }
     Text("Readiness combines HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
     SectionLabel("Signals")
-    Rule()
     DataRow(
         "Heart-rate variability",
         metricValue(snapshot.hrv),
@@ -552,13 +550,12 @@ private fun SleepDetail(snapshot: HealthSnapshot) {
         SleepScoreRing(snapshot.sleepScore)
     }
     SleepDuration(snapshot)
-    Rule(Modifier.padding(top = 12.dp))
+    Spacer(Modifier.height(12.dp))
     SleepStages(snapshot)
-    Rule(Modifier.padding(top = 8.dp))
+    Spacer(Modifier.height(8.dp))
     SectionLabel("7 days", color = FitColors.Violet, topPadding = 16.dp, bottomPadding = 8.dp)
     SleepTrend(snapshot.sleepTrend)
-    Spacer(Modifier.height(42.dp))
-    Rule()
+    Spacer(Modifier.height(16.dp))
     SectionLabel("Sleep score breakdown", color = FitColors.Violet, topPadding = 16.dp, bottomPadding = 8.dp)
     SleepBreakdown(snapshot.sleepBreakdown)
 }
@@ -718,7 +715,6 @@ private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
                 modifier = Modifier.width(36.dp),
             )
         }
-        Rule()
     }
 }
 
@@ -755,7 +751,6 @@ private fun StepsDetail(snapshot: HealthSnapshot) {
     SectionLabel("7 days", "10k target")
     SevenDayLine(snapshot.stepTrend, FitColors.Cyan, target = 10_000f)
     SectionLabel("Summary")
-    Rule()
     DataRow("7-day average", averageSteps.formatted(), "steps")
     bestDay?.let { DataRow("Best day · ${it.label}", it.value.toInt().formatted(), "steps", FitColors.Cyan) }
 }
@@ -769,7 +764,6 @@ private fun HeartDetail(snapshot: HealthSnapshot) {
     SectionLabel("Today", "synced 8:42")
     HeartChart()
     SectionLabel("Range")
-    Rule()
     DataRow("Resting", snapshot.restingHeartRate.toString(), "bpm")
     DataRow("Low", snapshot.lowHeartRate.toString(), "bpm")
     DataRow("High", snapshot.highHeartRate.toString(), "bpm", FitColors.Coral)
@@ -809,7 +803,6 @@ private fun CaloriesDetail(snapshot: HealthSnapshot) {
     SectionLabel("7 days")
     SevenDayBars(snapshot.calorieTrend, FitColors.Cyan)
     SectionLabel("Today")
-    Rule()
     DataRow("Active", snapshot.activeCalories.formatted(), "kcal", FitColors.Cyan)
     DataRow("Resting", snapshot.restingCalories.formatted(), "kcal")
     DataRow("7-day average", "2,241", "kcal")
@@ -904,7 +897,6 @@ private fun CoachScreen(
                 Spacer(Modifier.height(20.dp))
                 CoachResponseText(turn.answer)
                 Spacer(Modifier.height(40.dp))
-                Rule()
                 Spacer(Modifier.height(40.dp))
             }
             if (state.coachMessage != null) {
@@ -949,7 +941,6 @@ private fun CoachScreen(
             }
             if (suggestions.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
-                Rule()
             }
             suggestions.forEachIndexed { index, suggestion ->
                 Row(

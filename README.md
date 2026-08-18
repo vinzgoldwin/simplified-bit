@@ -77,9 +77,10 @@ Sleep score:
 
 Readiness score:
 
-- HRV compared with the previous 28 days using personal baseline deviation
-- Sleep duration and sleep timing consistency across the past 7 valid nights
-- Resting heart rate compared with the previous 28 days using personal baseline deviation
+- HRV compared with the previous 28 days: 50%
+- Sleep duration and sleep timing consistency across the past 7 valid nights: 30%
+- Resting heart rate compared with the previous 28 days: 20%
+- Each signal is converted to a bounded 0–100 component before weighting
 - Strong penalties when HRV is much lower or resting heart rate is much higher than the personal range
 - Prior-day activity is intentionally excluded, matching Google's current readiness model
 

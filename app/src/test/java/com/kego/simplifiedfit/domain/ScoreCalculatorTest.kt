@@ -97,7 +97,7 @@ class ScoreCalculatorTest {
                 recentSleep = List(7) { ReadinessSleep(480, 300) },
             ),
         )
-        assertEquals(63, score)
+        assertEquals(100, score)
     }
 
     @Test
@@ -135,6 +135,29 @@ class ScoreCalculatorTest {
         )
 
         assertEquals(15, score)
+    }
+
+    @Test
+    fun `reference high recovery day scores 90`() {
+        val score = ScoreCalculator.readiness(
+            ReadinessSignals(
+                hrv = 117.0,
+                hrvBaseline = listOf(105.7, 86.9, 83.7, 98.2, 79.4, 94.199, 95.1, 100.25, 89.449, 97.55, 77.6, 78.15, 91.95, 68.8),
+                restingHeartRate = 58.0,
+                restingHeartRateBaseline = listOf(53.0, 54.0, 56.0, 55.0, 55.0, 55.0, 55.0, 55.0, 56.0, 55.0, 57.0, 59.0, 59.0, 60.0),
+                recentSleep = listOf(
+                    ReadinessSleep(405, 339),
+                    ReadinessSleep(499, 248),
+                    ReadinessSleep(548, 310),
+                    ReadinessSleep(203, 61),
+                    ReadinessSleep(426, 145),
+                    ReadinessSleep(564, 161),
+                    ReadinessSleep(503, 256),
+                ),
+            ),
+        )
+
+        assertEquals(90, score)
     }
 
     @Test

@@ -36,11 +36,6 @@ import java.text.NumberFormat
 import kotlin.math.max
 
 @Composable
-fun Rule(modifier: Modifier = Modifier) {
-    Spacer(modifier.fillMaxWidth().height(1.dp).background(FitColors.Rule))
-}
-
-@Composable
 fun ScoreRing(
     value: Int,
     label: String,

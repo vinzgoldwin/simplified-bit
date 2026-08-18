@@ -73,7 +73,7 @@ object ScoreCalculator {
             restlessness = restlessness?.let(::points),
             rem = rem?.let(::points),
             deep = deep?.let(::points),
-            total = weighted(values),
+            total = points(weighted(values)),
         )
     }
 
@@ -81,25 +81,25 @@ object ScoreCalculator {
         val recentSleep = signals.recentSleep.takeLast(7)
         if (recentSleep.isEmpty()) return 0
 
-        val sleepRecovery = sleepRecovery(recentSleep)
-        val hrvDeviation = baselineDeviation(signals.hrv, signals.hrvBaseline, minimumSpread = 1.0) ?: 0.0
+        val hrvDeviation = baselineDeviation(signals.hrv, signals.hrvBaseline, minimumSpread = 1.0)
         val heartRateDeviation = baselineDeviation(
             signals.restingHeartRate,
             signals.restingHeartRateBaseline,
             minimumSpread = .5,
-        ) ?: 0.0
+        )
+        val factors = buildList {
+            add(sleepRecovery(recentSleep) to SLEEP_RECOVERY_WEIGHT)
+            hrvDeviation?.let { add(baselineScore(it, higherIsBetter = true) to HRV_WEIGHT) }
+            heartRateDeviation?.let { add(baselineScore(it, higherIsBetter = false) to HEART_RATE_WEIGHT) }
+        }
         // Large simultaneous deviations are recovery warnings, not values that good sleep
         // should average back toward the middle of the scale.
-        val severePenalty = maxOf(-hrvDeviation - SEVERE_DEVIATION, 0.0) +
-            maxOf(heartRateDeviation - SEVERE_DEVIATION, 0.0)
+        val severePenalty = maxOf(-(hrvDeviation ?: 0.0) - SEVERE_DEVIATION, 0.0) +
+            maxOf((heartRateDeviation ?: 0.0) - SEVERE_DEVIATION, 0.0)
 
-        return (
-            READINESS_BASE +
-                sleepRecovery * SLEEP_RECOVERY_POINTS +
-                hrvDeviation * DEVIATION_POINTS -
-                heartRateDeviation * DEVIATION_POINTS -
-                severePenalty * SEVERE_DEVIATION_PENALTY
-            ).roundToInt().coerceIn(0, 100)
+        return (weighted(factors) - severePenalty * SEVERE_DEVIATION_PENALTY)
+            .roundToInt()
+            .coerceIn(0, 100)
     }
 
     private fun ratio(value: Double, target: Double): Double = (value / target).coerceIn(0.0, 1.0)
@@ -123,6 +123,11 @@ object ScoreCalculator {
         return (value - mean) / standardDeviation.coerceAtLeast(minimumSpread)
     }
 
+    private fun baselineScore(deviation: Double, higherIsBetter: Boolean): Double {
+        val direction = if (higherIsBetter) 1.0 else -1.0
+        return (BASELINE_SCORE + deviation * direction * BASELINE_DEVIATION_POINTS).coerceIn(0.0, 100.0)
+    }
+
     private fun sleepRecovery(sleeps: List<ReadinessSleep>): Double {
         val duration = sleeps.map { ratio(it.asleepMinutes.toDouble(), READINESS_SLEEP_TARGET_MINUTES) }.average()
         val anchor = sleeps.first().midpointMinute
@@ -132,7 +137,7 @@ object ScoreCalculator {
         val mean = unwrappedMidpoints.average()
         val standardDeviation = sqrt(unwrappedMidpoints.map { (it - mean) * (it - mean) }.average())
         val consistency = (1.0 - standardDeviation / SLEEP_CONSISTENCY_LIMIT_MINUTES).coerceIn(0.0, 1.0)
-        return (duration + consistency) / 2.0
+        return (duration * SLEEP_DURATION_WEIGHT + consistency * SLEEP_CONSISTENCY_WEIGHT) * 100.0
     }
 
     private fun circularDifference(value: Int, anchor: Int): Int =
@@ -141,19 +146,23 @@ object ScoreCalculator {
 
     private fun points(value: Double): Int = (value * 100).roundToInt().coerceIn(0, 100)
 
-    private fun weighted(values: List<Pair<Double, Double>>): Int {
+    private fun weighted(values: List<Pair<Double, Double>>): Double {
         val totalWeight = values.sumOf { it.second }
-        if (totalWeight == 0.0) return 0
-        return (values.sumOf { it.first * it.second } / totalWeight * 100).roundToInt().coerceIn(0, 100)
+        if (totalWeight == 0.0) return 0.0
+        return values.sumOf { it.first * it.second } / totalWeight
     }
 
     private const val RESTLESSNESS_LIMIT_MINUTES = 22.0
     private const val SLEEP_DURATION_RANGE_MINUTES = 85
-    private const val READINESS_BASE = 50.0
-    private const val SLEEP_RECOVERY_POINTS = 13.0
-    private const val DEVIATION_POINTS = 5.0
+    private const val BASELINE_SCORE = 90.0
+    private const val BASELINE_DEVIATION_POINTS = 10.0
+    private const val SLEEP_RECOVERY_WEIGHT = .30
+    private const val HRV_WEIGHT = .50
+    private const val HEART_RATE_WEIGHT = .20
+    private const val SLEEP_DURATION_WEIGHT = .80
+    private const val SLEEP_CONSISTENCY_WEIGHT = .20
     private const val SEVERE_DEVIATION = 1.5
-    private const val SEVERE_DEVIATION_PENALTY = 15.0
+    private const val SEVERE_DEVIATION_PENALTY = 39.0
     private const val READINESS_SLEEP_TARGET_MINUTES = 480.0
     private const val SLEEP_CONSISTENCY_LIMIT_MINUTES = 180.0
     private const val MINUTES_PER_HALF_DAY = 720
