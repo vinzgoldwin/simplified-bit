@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,12 +51,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -73,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kego.simplifiedfit.R
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import kotlinx.coroutines.delay
@@ -128,11 +132,12 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     },
                 )
                 destination == Destination.TODAY -> TodayScreen(
-                    snapshot = snapshot,
+                    state = state,
                     onDetail = {
                         detailParent = null
                         detail = it
                     },
+                    onSync = viewModel::sync,
                     onSettings = { settings = true },
                     onDestination = { destination = it },
                 )
@@ -203,11 +208,13 @@ private fun AppHeader(
 
 @Composable
 private fun TodayScreen(
-    snapshot: HealthSnapshot,
+    state: AppUiState,
     onDetail: (Detail) -> Unit,
+    onSync: () -> Unit,
     onSettings: () -> Unit,
     onDestination: (Destination) -> Unit,
 ) {
+    val snapshot = state.snapshot
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(
             Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 18.dp),
@@ -221,15 +228,7 @@ private fun TodayScreen(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             val openReadiness = { onDetail(Detail.READINESS) }
             WhoopOverview(snapshot)
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 13.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("DATA SYNCED AT ${snapshot.lastSync}", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = 1.2.sp))
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.size(6.dp).background(FitColors.Green, CircleShape))
-            }
+            HomeSyncRow(state, onSync, onSettings)
             Column(Modifier.padding(horizontal = 15.dp)) {
                 WhoopInfoCard(
                     title = "YOUR DAILY BASELINE",
@@ -247,6 +246,79 @@ private fun TodayScreen(
             }
         }
         BottomNav(Destination.TODAY, onDestination)
+    }
+}
+
+@Composable
+private fun HomeSyncRow(
+    state: AppUiState,
+    onSync: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    val connected = state.googleConnected
+    val label = when {
+        state.syncing -> "SYNC IN PROGRESS"
+        !connected -> "GOOGLE HEALTH"
+        state.syncError != null -> "SYNC FAILED"
+        else -> "LAST SYNC"
+    }
+    val detail = when {
+        state.syncing -> "Safe to leave the app"
+        !connected -> "Not connected"
+        state.syncError != null -> state.syncError
+        state.snapshot.lastSync == "Never" -> "Never"
+        else -> "Today, ${state.snapshot.lastSync}"
+    }
+    val action = when {
+        state.syncing -> "SYNCING…"
+        !connected -> "SET UP"
+        state.syncError != null -> "RETRY"
+        else -> "SYNC NOW"
+    }
+    val actionColor = if (connected) FitColors.Green else FitColors.Muted
+
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 5.dp).padding(bottom = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                color = if (state.syncError != null) FitColors.Coral else FitColors.Muted,
+                style = FitType.Eyebrow.copy(fontSize = 8.sp, letterSpacing = 1.2.sp),
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                detail,
+                color = FitColors.Muted,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            Modifier
+                .border(1.dp, if (state.syncing) FitColors.Rule else actionColor, RoundedCornerShape(18.dp))
+                .clickable(enabled = !state.syncing) {
+                    if (connected) onSync() else onSettings()
+                }
+                .padding(horizontal = 13.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.syncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    color = FitColors.Green,
+                    strokeWidth = 1.5.dp,
+                )
+                Spacer(Modifier.width(7.dp))
+            }
+            Text(
+                action,
+                color = if (state.syncing) FitColors.Muted else actionColor,
+                style = FitType.Eyebrow.copy(fontSize = 8.sp, letterSpacing = 1.1.sp),
+            )
+        }
     }
 }
 
@@ -280,7 +352,23 @@ private fun WhoopOverview(snapshot: HealthSnapshot) {
                 val stepProgress = (snapshot.steps / 10_000f).coerceIn(0f, 1f)
                 drawArc(steps, -90f, stepProgress * 360f, false, Offset(innerInset, innerInset), innerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Butt))
             }
-            Text("S/F", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 13.sp, letterSpacing = 0.sp))
+            Box(
+                Modifier
+                    .size(width = 44.dp, height = 31.dp)
+                    .semantics { contentDescription = "SimplifiedFit" },
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.sf_mark_primary),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(FitColors.White),
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Image(
+                    painter = painterResource(R.drawable.sf_mark_accent),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
         Column(Modifier.width(74.dp)) {
             Text(snapshot.steps.formatted(), color = FitColors.Cyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -1399,11 +1487,11 @@ private fun SettingsScreen(
                 }
             }
 
-            state.setupMessage?.let {
+            (state.setupMessage ?: state.syncError.takeIf { page == SettingsPage.GOOGLE_HEALTH })?.let {
                 Spacer(Modifier.height(18.dp))
                 Text(
                     it,
-                    color = if (it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted,
+                    color = if (it == state.syncError || it.contains("failed", true) || it.contains("could not", true)) FitColors.Coral else FitColors.Muted,
                     style = FitType.Body.copy(fontSize = 12.sp),
                 )
             }

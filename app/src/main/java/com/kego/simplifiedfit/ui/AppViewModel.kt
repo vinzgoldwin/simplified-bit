@@ -22,6 +22,7 @@ import com.kego.simplifiedfit.domain.ScoreCalculator
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import com.kego.simplifiedfit.domain.SleepSignals
 import com.kego.simplifiedfit.sync.CoachRequestWorker
+import com.kego.simplifiedfit.sync.HealthSyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
@@ -47,6 +48,7 @@ data class AppUiState(
     val googleConnected: Boolean,
     val coachConnected: Boolean,
     val syncing: Boolean = false,
+    val syncError: String? = null,
     val setupMessage: String? = null,
     val coachMessage: String? = null,
     val coachReply: String? = null,
@@ -80,6 +82,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val local = app.healthRepository.recent()
         if (local.isNotEmpty()) state = state.copy(snapshot = local.toSnapshot())
+        observeHealthSync()
         if (state.googleConnected) sync()
         app.secureStore.currentCoachJobId()
             ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
@@ -88,11 +91,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sync() {
         if (!state.googleConnected || state.syncing) return
+        state = state.copy(syncing = true, syncError = null, setupMessage = null)
+        runCatching { HealthSyncWorker.enqueueNow(app) }
+            .onFailure { state = state.copy(syncing = false, syncError = it.message ?: "Could not start sync") }
+    }
+
+    private fun observeHealthSync() {
         viewModelScope.launch {
-            state = state.copy(syncing = true, setupMessage = null)
-            runCatching { withContext(Dispatchers.IO) { app.healthRepository.sync() } }
-                .onSuccess { state = state.copy(snapshot = it.toSnapshot(), syncing = false, setupMessage = null) }
-                .onFailure { state = state.copy(syncing = false, setupMessage = it.message ?: "Sync failed") }
+            WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(HealthSyncWorker.MANUAL_WORK)
+                .collectLatest { work ->
+                    val info = work.firstOrNull { it.state in ACTIVE_SYNC_STATES } ?: work.lastOrNull()
+                        ?: return@collectLatest
+                    state = when (info.state) {
+                        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED, WorkInfo.State.RUNNING -> state.copy(
+                            syncing = true,
+                            syncError = null,
+                        )
+                        WorkInfo.State.SUCCEEDED -> state.copy(
+                            snapshot = withContext(Dispatchers.IO) { app.healthRepository.recent() }.toSnapshot(),
+                            syncing = false,
+                            syncError = null,
+                        )
+                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> state.copy(
+                            syncing = false,
+                            syncError = info.outputData.getString(HealthSyncWorker.KEY_ERROR)
+                                ?: "Sync was interrupted",
+                        )
+                    }
+                }
         }
     }
 
@@ -129,6 +155,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     snapshot = it.toSnapshot(),
                     googleConnected = true,
                     syncing = false,
+                    syncError = null,
                     setupMessage = "Google Health connected",
                 )
             }.onFailure {
@@ -139,7 +166,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnectGoogle() {
         app.secureStore.clearGoogleCredentials()
-        state = state.copy(googleConnected = false, setupMessage = "Google Health disconnected")
+        state = state.copy(
+            googleConnected = false,
+            syncError = null,
+            setupMessage = "Google Health disconnected",
+        )
     }
 
     fun selectCoachProvider(provider: CoachProvider) {
@@ -387,6 +418,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val MAX_VISIBLE_COACH_TURNS = 8
         val ACTIVE_COACH_PHASES = setOf(CoachPhase.CONTEXT_READY, CoachPhase.ANALYZING, CoachPhase.WRITING)
+        val ACTIVE_SYNC_STATES = setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED, WorkInfo.State.RUNNING)
     }
 
     private fun List<DailyHealth>.toSnapshot(): HealthSnapshot {
