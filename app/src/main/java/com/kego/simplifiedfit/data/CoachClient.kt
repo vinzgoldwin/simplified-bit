@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.flowOn
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
 import java.net.URL
 import java.nio.charset.StandardCharsets
 
@@ -149,9 +148,6 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         http.inputStream.bufferedReader().use { reader ->
             while (true) {
                 val line = reader.readLine() ?: break
-                if (System.currentTimeMillis() - startedAt >= REQUEST_TIMEOUT_MS) {
-                    throw SocketTimeoutException("Coach took too long to respond. Try again.")
-                }
                 val data = line.takeIf { it.startsWith("data:") }
                     ?.removePrefix("data:")
                     ?.trimStart()
@@ -196,11 +192,10 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         emit(CoachEvent.Complete(answer, System.currentTimeMillis() - startedAt))
     }.flowOn(Dispatchers.IO)
 
-    private fun openRouterPayload(request: CoachRequest, stream: Boolean): JSONObject = JSONObject()
+    internal fun openRouterPayload(request: CoachRequest, stream: Boolean): JSONObject = JSONObject()
         .put("model", MODEL)
         .put("stream", stream)
-        .put("max_tokens", 800)
-        .put("reasoning", JSONObject().put("effort", "low"))
+        .put("reasoning", JSONObject().put("effort", "medium"))
         .put(
             "messages",
             JSONArray()
@@ -225,8 +220,7 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
         const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val MODEL = "~deepseek/deepseek-v4-flash-latest"
         const val CONNECT_TIMEOUT_MS = 10_000
-        const val READ_TIMEOUT_MS = 45_000
-        const val REQUEST_TIMEOUT_MS = 60_000L
+        const val READ_TIMEOUT_MS = 120_000
 
         val OUTPUT_SCHEMA = JSONObject()
             .put("type", "object")

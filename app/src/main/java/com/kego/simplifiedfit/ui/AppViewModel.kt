@@ -1,6 +1,7 @@
 package com.kego.simplifiedfit.ui
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -25,6 +26,7 @@ import com.kego.simplifiedfit.sync.CoachRequestWorker
 import com.kego.simplifiedfit.sync.HealthSyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -327,7 +329,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             previousAnswer = previousCoachAnswer,
         )
         runCatching { CoachRequestWorker.enqueue(app, state.coachProvider, request) }
-            .onSuccess(::observeCoachWork)
+            .onSuccess { observeCoachWork(it, holdContextReady = true) }
             .onFailure {
                 state = state.copy(
                     coachBusy = false,
@@ -338,12 +340,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    private fun observeCoachWork(id: UUID) {
+    private fun observeCoachWork(id: UUID, holdContextReady: Boolean = false) {
         coachObservation?.cancel()
         coachObservation = viewModelScope.launch {
+            val revealProgressAt = SystemClock.elapsedRealtime() + if (holdContextReady) CONTEXT_READY_DISPLAY_MS else 0L
             WorkManager.getInstance(app).getWorkInfoByIdFlow(id).collectLatest { info ->
                 val workInfo = info ?: return@collectLatest
                 val (provider, request) = app.secureStore.coachJob(id.toString()) ?: return@collectLatest
+                if (holdContextReady && workInfo.hasAdvancedPastContextReady()) {
+                    delay((revealProgressAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+                }
                 state = when (workInfo.state) {
                     WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> state.copy(
                         coachMessage = request.message,
@@ -415,7 +421,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         CoachProgress.WRITING -> CoachPhase.WRITING
     }
 
+    private fun WorkInfo.hasAdvancedPastContextReady(): Boolean = when (this.state) {
+        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> false
+        WorkInfo.State.RUNNING -> progress.getString(CoachRequestWorker.KEY_PHASE) != CoachProgress.CONTEXT_READY.name
+        else -> true
+    }
+
     private companion object {
+        const val CONTEXT_READY_DISPLAY_MS = 2_000L
         const val MAX_VISIBLE_COACH_TURNS = 8
         val ACTIVE_COACH_PHASES = setOf(CoachPhase.CONTEXT_READY, CoachPhase.ANALYZING, CoachPhase.WRITING)
         val ACTIVE_SYNC_STATES = setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED, WorkInfo.State.RUNNING)

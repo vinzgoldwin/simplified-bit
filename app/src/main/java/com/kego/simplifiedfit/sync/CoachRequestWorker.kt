@@ -15,6 +15,7 @@ import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.data.CoachRequest
 import com.kego.simplifiedfit.data.OpenRouterCoachClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import org.json.JSONException
 import java.io.IOException
@@ -48,20 +49,31 @@ class CoachRequestWorker(
                     )
                     is CoachEvent.ResponseDelta -> {
                         partialResponse.append(event.text)
-                        if (publishedLength == 0 || partialResponse.length - publishedLength >= PARTIAL_UPDATE_CHARS) {
+                        while (true) {
+                            val nextLength = nextCoachPartialLength(partialResponse.length, publishedLength) ?: break
                             setProgress(
                                 workDataOf(
                                     KEY_PHASE to CoachProgress.WRITING.name,
-                                    KEY_PARTIAL_RESPONSE to partialResponse.toString(),
+                                    KEY_PARTIAL_RESPONSE to partialResponse.substring(0, nextLength),
                                 ),
                             )
-                            publishedLength = partialResponse.length
+                            publishedLength = nextLength
+                            delay(PARTIAL_UPDATE_INTERVAL_MS)
                         }
                     }
                     is CoachEvent.Complete -> complete = event
                 }
             }
             val result = complete ?: error("Coach returned no answer")
+            if (publishedLength < partialResponse.length) {
+                setProgress(
+                    workDataOf(
+                        KEY_PHASE to CoachProgress.WRITING.name,
+                        KEY_PARTIAL_RESPONSE to partialResponse.toString(),
+                    ),
+                )
+                delay(FINAL_PARTIAL_DISPLAY_MS)
+            }
             app.secureStore.saveCoachJobResult(jobId, result.answer, result.durationMs)
             Result.success()
         } catch (error: Throwable) {
@@ -86,7 +98,8 @@ class CoachRequestWorker(
         const val KEY_PARTIAL_RESPONSE = "partial_response"
         private const val KEY_JOB_ID = "job_id"
         private const val UNIQUE_WORK = "coach-request"
-        private const val PARTIAL_UPDATE_CHARS = 48
+        private const val PARTIAL_UPDATE_INTERVAL_MS = 35L
+        private const val FINAL_PARTIAL_DISPLAY_MS = 75L
 
         fun enqueue(context: Context, provider: CoachProvider, request: CoachRequest): UUID {
             val id = UUID.randomUUID()
@@ -100,4 +113,14 @@ class CoachRequestWorker(
             return id
         }
     }
+}
+
+private const val FIRST_PARTIAL_CHARS = 12
+private const val PARTIAL_UPDATE_CHARS = 48
+
+internal fun nextCoachPartialLength(availableLength: Int, publishedLength: Int): Int? = when {
+    publishedLength >= availableLength -> null
+    publishedLength == 0 -> minOf(availableLength, FIRST_PARTIAL_CHARS)
+    availableLength - publishedLength >= PARTIAL_UPDATE_CHARS -> publishedLength + PARTIAL_UPDATE_CHARS
+    else -> null
 }

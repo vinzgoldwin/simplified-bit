@@ -1,5 +1,6 @@
 package com.kego.simplifiedfit.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
@@ -40,12 +41,14 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -76,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
 import com.kego.simplifiedfit.R
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
@@ -88,6 +92,14 @@ import kotlin.math.roundToInt
 @Composable
 fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
     var darkTheme by rememberSaveable { mutableStateOf(true) }
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
     SimplifiedFitTheme(darkTheme = darkTheme) {
         val state = viewModel.state
         val snapshot = state.snapshot
@@ -106,7 +118,7 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         }
 
         Box(Modifier.fillMaxSize().background(FitColors.Black)) {
-            MatteTexture(settings)
+            MatteTexture(settings, darkTheme)
             when {
                 settings -> SettingsScreen(
                     viewModel = viewModel,
@@ -155,20 +167,24 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
 }
 
 @Composable
-private fun MatteTexture(settings: Boolean) {
+private fun MatteTexture(settings: Boolean, darkTheme: Boolean) {
     val backgroundColor = FitColors.Black
     Canvas(Modifier.fillMaxSize()) {
-        drawRect(
-            Brush.verticalGradient(
-                colors = if (settings) {
-                    listOf(backgroundColor, Color(0xFF142024), Color(0xFF45555D))
-                } else {
-                    listOf(Color(0xFF28363C), Color(0xFF141C1F), backgroundColor)
-                },
-                startY = 0f,
-                endY = if (settings) size.height else size.height * .78f,
-            ),
-        )
+        if (darkTheme) {
+            drawRect(
+                Brush.verticalGradient(
+                    colors = if (settings) {
+                        listOf(backgroundColor, Color(0xFF142024), Color(0xFF45555D))
+                    } else {
+                        listOf(Color(0xFF28363C), Color(0xFF141C1F), backgroundColor)
+                    },
+                    startY = 0f,
+                    endY = if (settings) size.height else size.height * .78f,
+                ),
+            )
+        } else {
+            drawRect(backgroundColor)
+        }
     }
 }
 
@@ -263,7 +279,7 @@ private fun HomeSyncRow(
         else -> "LAST SYNC"
     }
     val detail = when {
-        state.syncing -> "Safe to leave the app"
+        state.syncing -> null
         !connected -> "Not connected"
         state.syncError != null -> state.syncError
         state.snapshot.lastSync == "Never" -> "Never"
@@ -287,14 +303,16 @@ private fun HomeSyncRow(
                 color = if (state.syncError != null) FitColors.Coral else FitColors.Muted,
                 style = FitType.Eyebrow.copy(fontSize = 8.sp, letterSpacing = 1.2.sp),
             )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                detail,
-                color = FitColors.Muted,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            detail?.let {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    it,
+                    color = FitColors.Muted,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Row(
             Modifier
@@ -414,7 +432,7 @@ private fun WhoopMetricCard(label: String, value: String, supporting: String, ic
 
 @Composable
 private fun BottomNav(selected: Destination?, onDestination: (Destination) -> Unit) {
-    Column(Modifier.background(Color(0xFF080D0F)).navigationBarsPadding()) {
+    Column(Modifier.background(FitColors.Navigation).navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(67.dp)) {
             NavItem("Today", FitIcon.CALENDAR, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
             NavItem("Coach", FitIcon.COACH, selected == Destination.COACH, Modifier.weight(1f)) { onDestination(Destination.COACH) }
@@ -1083,7 +1101,7 @@ private fun CoachScreen(
         }
         Row(
             Modifier.fillMaxWidth().imePadding().padding(horizontal = 18.dp, vertical = 11.dp)
-                .background(Color(0xFF090E10), RoundedCornerShape(12.dp))
+                .background(FitColors.Input, RoundedCornerShape(12.dp))
                 .border(1.dp, FitColors.Rule, RoundedCornerShape(12.dp))
                 .padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,

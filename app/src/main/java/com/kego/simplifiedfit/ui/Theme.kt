@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.sp
 private data class FitColorPalette(
     val background: Color,
     val surface: Color,
+    val navigation: Color,
+    val input: Color,
     val rule: Color,
     val track: Color,
     val content: Color,
@@ -31,6 +33,8 @@ private data class FitColorPalette(
 private val DarkFitColors = FitColorPalette(
     background = Color(0xFF080D0F),
     surface = Color(0xFF2A3032),
+    navigation = Color(0xFF080D0F),
+    input = Color(0xFF090E10),
     rule = Color(0xFF424A4D),
     track = Color(0xFF343C3F),
     content = Color(0xFFF7F8F7),
@@ -46,11 +50,20 @@ private val DarkFitColors = FitColorPalette(
 
 private val LightFitColors = DarkFitColors.copy(
     background = Color(0xFFF7F7F2),
-    surface = Color(0xFFEDEDE7),
-    rule = Color(0xFFD6D7D1),
-    track = Color(0xFFE0E1DB),
+    surface = Color(0xFFE9EAE4),
+    navigation = Color(0xFFE9EAE4),
+    input = Color(0xFFE9EAE4),
+    rule = Color(0xFFC8CBC4),
+    track = Color(0xFFD9DBD4),
     content = Color(0xFF151718),
-    muted = Color(0xFF666B6D),
+    muted = Color(0xFF52585A),
+    green = Color(0xFF006B4F),
+    violet = Color(0xFF5146B8),
+    stageAwake = Color(0xFF5C3FB4),
+    stageDeep = Color(0xFF2E4FA8),
+    stageRem = Color(0xFF267A7A),
+    cyan = Color(0xFF006B84),
+    coral = Color(0xFFB4232D),
 )
 
 private val LocalFitColors = staticCompositionLocalOf { DarkFitColors }
@@ -58,6 +71,8 @@ private val LocalFitColors = staticCompositionLocalOf { DarkFitColors }
 object FitColors {
     val Black: Color @Composable get() = LocalFitColors.current.background
     val Surface: Color @Composable get() = LocalFitColors.current.surface
+    val Navigation: Color @Composable get() = LocalFitColors.current.navigation
+    val Input: Color @Composable get() = LocalFitColors.current.input
     val Rule: Color @Composable get() = LocalFitColors.current.rule
     val Track: Color @Composable get() = LocalFitColors.current.track
     val White: Color @Composable get() = LocalFitColors.current.content
@@ -116,7 +131,7 @@ fun SimplifiedFitTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
                     background = colors.background,
                     surface = colors.surface,
                     primary = colors.green,
-                    onPrimary = colors.content,
+                    onPrimary = colors.background,
                     onBackground = colors.content,
                     onSurface = colors.content,
                 )

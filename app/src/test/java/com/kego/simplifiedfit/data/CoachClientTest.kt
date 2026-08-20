@@ -62,6 +62,21 @@ class CoachClientTest {
     }
 
     @Test
+    fun `does not cap the structured answer`() {
+        val payload = OpenRouterCoachClient("test-key").openRouterPayload(
+            CoachRequest(
+                message = "How am I doing?",
+                healthContext = "Readiness: 90/100",
+            ),
+            stream = true,
+        )
+
+        assertEquals("medium", payload.getJSONObject("reasoning").getString("effort"))
+        assertFalse(payload.has("max_tokens"))
+        assertFalse(payload.has("max_completion_tokens"))
+    }
+
+    @Test
     fun `asks for short scannable markdown responses`() {
         val prompt = coachPrompt(
             CoachRequest(
