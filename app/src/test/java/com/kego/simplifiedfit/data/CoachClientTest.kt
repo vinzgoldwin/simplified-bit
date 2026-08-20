@@ -70,14 +70,14 @@ class CoachClientTest {
             ),
         )
 
-        assertTrue(prompt.contains("Lead with the main takeaway"))
+        assertTrue(prompt.contains("Lead with the real point in one short sentence"))
         assertTrue(prompt.contains("Default to no more than 120 words"))
         assertTrue(prompt.contains("use a Markdown bullet list"))
         assertTrue(prompt.contains("Bold only important numbers and recommended actions"))
     }
 
     @Test
-    fun `asks for a natural supportive coaching voice`() {
+    fun `asks for a natural human coaching voice`() {
         val prompt = coachPrompt(
             CoachRequest(
                 message = "What should I focus on today?",
@@ -85,9 +85,10 @@ class CoachClientTest {
             ),
         )
 
-        assertTrue(prompt.contains("trusted coach in a real conversation"))
+        assertTrue(prompt.contains("thoughtful person, not a customer-support bot"))
+        assertTrue(prompt.contains("Have an opinion when the evidence supports one"))
         assertTrue(prompt.contains("supportive, practical choices rather than commands"))
-        assertTrue(prompt.contains("Never shame, lecture, exaggerate, or use generic praise"))
-        assertTrue(prompt.contains("Avoid canned openings"))
+        assertTrue(prompt.contains("Avoid canned praise, promotional language, inflated claims"))
+        assertTrue(prompt.contains("silently remove anything that sounds obviously AI-generated"))
     }
 }
