@@ -1,6 +1,9 @@
 package com.kego.simplifiedfit.domain
 
 import kotlin.math.roundToInt
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.PI
 import kotlin.math.sqrt
 
 data class SleepSignals(
@@ -79,27 +82,31 @@ object ScoreCalculator {
 
     fun readiness(signals: ReadinessSignals): Int {
         val recentSleep = signals.recentSleep.takeLast(7)
-        if (recentSleep.isEmpty()) return 0
+        if (recentSleep.size < MINIMUM_BASELINE_DAYS) return 0
 
-        val hrvDeviation = baselineDeviation(signals.hrv, signals.hrvBaseline, minimumSpread = 1.0)
+        val hrvDeviation = baselineDeviation(
+            signals.hrv?.takeIf { it > 0.0 }?.let(::ln),
+            signals.hrvBaseline.filter { it > 0.0 }.map(::ln),
+            minimumSpread = MINIMUM_LOG_HRV_SPREAD,
+        )
         val heartRateDeviation = baselineDeviation(
             signals.restingHeartRate,
             signals.restingHeartRateBaseline,
-            minimumSpread = .5,
+            minimumSpread = MINIMUM_HEART_RATE_SPREAD,
         )
-        val factors = buildList {
-            add(sleepRecovery(recentSleep) to SLEEP_RECOVERY_WEIGHT)
-            hrvDeviation?.let { add(baselineScore(it, higherIsBetter = true) to HRV_WEIGHT) }
-            heartRateDeviation?.let { add(baselineScore(it, higherIsBetter = false) to HEART_RATE_WEIGHT) }
+        val autonomicScores = buildList {
+            hrvDeviation?.let { add(deviationScore(it)) }
+            heartRateDeviation?.let { add(deviationScore(-it)) }
         }
-        // Large simultaneous deviations are recovery warnings, not values that good sleep
-        // should average back toward the middle of the scale.
-        val severePenalty = maxOf(-(hrvDeviation ?: 0.0) - SEVERE_DEVIATION, 0.0) +
-            maxOf((heartRateDeviation ?: 0.0) - SEVERE_DEVIATION, 0.0)
+        if (autonomicScores.isEmpty()) return 0
 
-        return (weighted(factors) - severePenalty * SEVERE_DEVIATION_PENALTY)
+        // HRV and resting heart rate describe the same autonomic recovery domain. Their
+        // geometric mean prevents one strong signal from erasing a warning from the other.
+        val autonomicRecovery = autonomicScores.fold(1.0) { product, score -> product * score }
+            .let { product -> Math.pow(product, 1.0 / autonomicScores.size) }
+        return (autonomicRecovery * AUTONOMIC_RECOVERY_WEIGHT + sleepRecovery(recentSleep) * SLEEP_RECOVERY_WEIGHT)
             .roundToInt()
-            .coerceIn(0, 100)
+            .coerceIn(1, 100)
     }
 
     private fun ratio(value: Double, target: Double): Double = (value / target).coerceIn(0.0, 1.0)
@@ -117,16 +124,16 @@ object ScoreCalculator {
     }
 
     private fun baselineDeviation(value: Double?, baseline: List<Double>, minimumSpread: Double): Double? {
-        if (value == null || baseline.isEmpty()) return null
+        if (value == null || baseline.size < MINIMUM_BASELINE_DAYS) return null
         val mean = baseline.average()
         val standardDeviation = sqrt(baseline.map { (it - mean) * (it - mean) }.average())
         return (value - mean) / standardDeviation.coerceAtLeast(minimumSpread)
     }
 
-    private fun baselineScore(deviation: Double, higherIsBetter: Boolean): Double {
-        val direction = if (higherIsBetter) 1.0 else -1.0
-        return (BASELINE_SCORE + deviation * direction * BASELINE_DEVIATION_POINTS).coerceIn(0.0, 100.0)
-    }
+    // A unit-variance logistic distribution turns a personal z-score into a bounded
+    // percentile without a fitted starting score, floor, or severe-day exception.
+    private fun deviationScore(deviation: Double): Double =
+        100.0 / (1.0 + exp(-PI / sqrt(3.0) * deviation))
 
     private fun sleepRecovery(sleeps: List<ReadinessSleep>): Double {
         val duration = sleeps.map { ratio(it.asleepMinutes.toDouble(), READINESS_SLEEP_TARGET_MINUTES) }.average()
@@ -154,15 +161,13 @@ object ScoreCalculator {
 
     private const val RESTLESSNESS_LIMIT_MINUTES = 22.0
     private const val SLEEP_DURATION_RANGE_MINUTES = 85
-    private const val BASELINE_SCORE = 90.0
-    private const val BASELINE_DEVIATION_POINTS = 10.0
+    private const val MINIMUM_BASELINE_DAYS = 7
+    private const val MINIMUM_LOG_HRV_SPREAD = .05
+    private const val MINIMUM_HEART_RATE_SPREAD = 1.0
+    private const val AUTONOMIC_RECOVERY_WEIGHT = .70
     private const val SLEEP_RECOVERY_WEIGHT = .30
-    private const val HRV_WEIGHT = .50
-    private const val HEART_RATE_WEIGHT = .20
     private const val SLEEP_DURATION_WEIGHT = .80
     private const val SLEEP_CONSISTENCY_WEIGHT = .20
-    private const val SEVERE_DEVIATION = 1.5
-    private const val SEVERE_DEVIATION_PENALTY = 39.0
     private const val READINESS_SLEEP_TARGET_MINUTES = 480.0
     private const val SLEEP_CONSISTENCY_LIMIT_MINUTES = 180.0
     private const val MINUTES_PER_HALF_DAY = 720

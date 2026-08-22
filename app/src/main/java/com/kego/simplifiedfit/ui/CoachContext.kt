@@ -28,14 +28,14 @@ internal fun buildCoachContext(
     val validSleepNights = days.count { (it.asleepMinutes ?: 0) >= 180 }
     val ageInDays = java.time.LocalDate.now().toEpochDay() - current.date.toEpochDay()
     val readiness = when (val score = current.readinessScore) {
-        null -> "Readiness: unavailable\nTraining guidance: Do not infer workout readiness from one metric alone. Ask how the user feels and give conditional advice."
-        in 65..100 -> "Readiness: $score/100 (high)\nTraining guidance: Overall recovery supports a normal or challenging workout if the user feels well. A component below baseline does not override this assessment."
-        in 30..64 -> "Readiness: $score/100 (moderate)\nTraining guidance: A normal workout is reasonable if the user feels well. Adjust intensity based on energy, soreness, symptoms, and the warm-up."
-        else -> "Readiness: $score/100 (low)\nTraining guidance: Favor rest or light activity and reassess based on how the user feels."
+        null -> "Recovery estimate: unavailable\nTraining guidance: Do not infer workout readiness from one metric alone. Ask how the user feels and give conditional advice."
+        in 65..100 -> "Recovery estimate: $score/100 (high)\nTraining guidance: Overall recovery supports a normal or challenging workout if the user feels well. A component below baseline does not override this assessment."
+        in 30..64 -> "Recovery estimate: $score/100 (moderate)\nTraining guidance: A normal workout is reasonable if the user feels well. Adjust intensity based on energy, soreness, symptoms, and the warm-up."
+        else -> "Recovery estimate: $score/100 (low)\nTraining guidance: Favor rest or light activity and reassess based on how the user feels."
     }
 
     val missing = buildList {
-        if (current.readinessScore == null) add("readiness")
+        if (current.readinessScore == null) add("recovery estimate")
         if (sleepBreakdown == null) add("sleep score")
         if (current.asleepMinutes == null) add("sleep duration")
         if (current.steps == null) add("steps")
@@ -65,11 +65,11 @@ internal fun buildCoachContext(
         Total calories: ${current.totalCalories.metric("kcal", 0)}
         Active calories: ${current.activeCalories.metric("kcal", 0)}
 
-        OVERALL TRAINING READINESS
+        OVERALL RECOVERY ESTIMATE
         $readiness
-        Readiness already combines recent sleep, HRV, and resting heart rate. Use the components below to explain it, not score recovery again.
+        This estimate already combines recent sleep, HRV, and resting heart rate. Use the components below to explain it, not score recovery again.
 
-        READINESS COMPONENTS
+        RECOVERY COMPONENTS
         HRV: ${current.hrv.metric("ms")}
         HRV 28-day baseline: ${hrvBaseline.baseline("ms", priorDays.count { it.hrv != null })}
         HRV vs baseline: ${percentDifference(current.hrv, hrvBaseline)}

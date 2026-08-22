@@ -5,13 +5,13 @@ A private Android health dashboard for Fitbit data, with a choice of direct Open
 ## What it shows
 
 - Steps
-- Readiness score
+- Recovery estimate
 - Sleep score
 - Latest and resting heart rate
 - Daily total and active calories
 - A focused Coach using OpenRouter or the local Codex companion
 
-Google Health does not expose its readiness or Fitbit sleep scores through the API, so both are calculated locally from the same published factors and calibrated against the Fitbit scores on the connected device. Readiness requires seven valid sleep nights before a score appears. Its personal baseline keeps improving through 30 days.
+Google Health does not expose its readiness or Fitbit sleep scores through the API, so both are calculated locally. The recovery estimate is an independent wellness indicator rather than a copy of Google's proprietary score. It requires seven valid sleep nights before a score appears, and its personal baseline keeps improving through 28 days.
 
 ## Install the Android app
 
@@ -75,13 +75,13 @@ Sleep score:
 - REM stage balance: 12.5%
 - Deep stage balance: 12.5%
 
-Readiness score:
+Recovery estimate:
 
-- HRV compared with the previous 28 days: 50%
-- Sleep duration and sleep timing consistency across the past 7 valid nights: 30%
-- Resting heart rate compared with the previous 28 days: 20%
-- Each signal is converted to a bounded 0–100 component before weighting
-- Strong penalties when HRV is much lower or resting heart rate is much higher than the personal range
-- Prior-day activity is intentionally excluded, matching Google's current readiness model
+- Nightly HRV is log-transformed and compared with the previous 28 days
+- Resting heart rate is compared with the previous 28 days in the opposite direction
+- Personal deviations become bounded percentiles without a fitted starting score
+- HRV and resting heart rate form one autonomic-recovery signal; neither can erase a warning from the other
+- Autonomic recovery contributes 70%; sleep duration and timing consistency across 7 nights contributes 30%
+- There are no score floors, severe-day patches, or Google-specific calibration constants
 
 Restlessness, REM, and deep-stage signals are reweighted when unavailable instead of treated as zero. Stage scores are strongest inside typical sleep-stage ranges rather than rewarding more stage minutes without limit. Across the 11 nights available during calibration, the local sleep score stays within two points of Fitbit. These are wellness indicators, not medical scores.

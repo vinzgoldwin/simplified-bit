@@ -26,7 +26,7 @@ data class DailyHealth(
     val readinessScore: Int? = null,
 )
 
-class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 2) {
+class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """

@@ -87,7 +87,7 @@ class ScoreCalculatorTest {
     }
 
     @Test
-    fun `readiness still uses sleep recovery when physiological signals are missing`() {
+    fun `readiness waits for a physiological baseline`() {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = null,
@@ -97,7 +97,7 @@ class ScoreCalculatorTest {
                 recentSleep = List(7) { ReadinessSleep(480, 300) },
             ),
         )
-        assertEquals(100, score)
+        assertEquals(0, score)
     }
 
     @Test
@@ -105,9 +105,9 @@ class ScoreCalculatorTest {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = 70.0,
-                hrvBaseline = listOf(40.0, 45.0, 50.0, 55.0, 60.0),
+                hrvBaseline = listOf(38.0, 40.0, 45.0, 50.0, 55.0, 60.0, 62.0),
                 restingHeartRate = 52.0,
-                restingHeartRateBaseline = listOf(52.0, 56.0, 58.0, 60.0, 62.0),
+                restingHeartRateBaseline = listOf(52.0, 54.0, 56.0, 58.0, 60.0, 62.0, 64.0),
                 recentSleep = List(7) { ReadinessSleep(480, 300) },
             ),
         )
@@ -115,7 +115,7 @@ class ScoreCalculatorTest {
     }
 
     @Test
-    fun `severe HRV and resting heart rate deviations are not averaged away`() {
+    fun `poor autonomic signals are not averaged away by good sleep`() {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = 77.6,
@@ -134,11 +134,11 @@ class ScoreCalculatorTest {
             ),
         )
 
-        assertEquals(15, score)
+        assertTrue(score < 30)
     }
 
     @Test
-    fun `reference high recovery day scores 90`() {
+    fun `strong hrv with elevated resting heart rate stays moderate`() {
         val score = ScoreCalculator.readiness(
             ReadinessSignals(
                 hrv = 117.0,
@@ -157,7 +157,7 @@ class ScoreCalculatorTest {
             ),
         )
 
-        assertEquals(90, score)
+        assertTrue(score in 30..64)
     }
 
     @Test

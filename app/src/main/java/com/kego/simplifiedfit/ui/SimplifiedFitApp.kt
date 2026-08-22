@@ -248,8 +248,8 @@ private fun TodayScreen(
             Column(Modifier.padding(horizontal = 15.dp)) {
                 WhoopInfoCard(
                     title = "YOUR DAILY BASELINE",
-                    body = "Readiness combines sleep, HRV, and resting heart rate to show how prepared you are today.",
-                    action = "VIEW READINESS",
+                    body = "Recovery estimates how your body is responding using sleep, HRV, and resting heart rate.",
+                    action = "VIEW RECOVERY",
                     onClick = openReadiness,
                 )
                 SectionLabel("Today's signals", topPadding = 22.dp, bottomPadding = 9.dp)
@@ -349,7 +349,7 @@ private fun WhoopOverview(snapshot: HealthSnapshot) {
     ) {
         Column(Modifier.width(74.dp), horizontalAlignment = Alignment.End) {
             Text(snapshot.readiness.toString(), color = FitColors.Green, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("READINESS", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 7.sp))
+            Text("RECOVERY", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 7.sp))
             Spacer(Modifier.height(14.dp))
             Text(metricValue(snapshot.hrv), color = FitColors.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text("HRV", color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp))
@@ -461,7 +461,7 @@ private fun DetailScreen(
     onDetail: (Detail) -> Unit,
 ) {
     val title = when (detail) {
-        Detail.READINESS -> "Readiness"
+        Detail.READINESS -> "Recovery"
         Detail.SLEEP -> "Sleep"
         Detail.STEPS -> "Steps"
         Detail.HEART -> "Heart"
@@ -489,9 +489,9 @@ private fun DetailScreen(
 @Composable
 private fun ReadinessDetail(snapshot: HealthSnapshot, onDetail: (Detail) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 27.dp), horizontalArrangement = Arrangement.Center) {
-        ScoreRing(snapshot.readiness, "Readiness", FitColors.Green, size = 176.dp)
+        ScoreRing(snapshot.readiness, "Recovery", FitColors.Green, size = 176.dp)
     }
-    Text("Readiness combines HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
+    Text("Recovery is a local estimate from HRV, recent sleep, and resting heart rate.", color = FitColors.White, style = FitType.Body)
     SectionLabel("Signals")
     DataRow(
         "Heart-rate variability",
@@ -1382,7 +1382,7 @@ private fun SettingsScreen(
                     Spacer(Modifier.height(9.dp))
                     SettingsMenuRow(FitIcon.WAVES, "PRIVACY & DATA", "30 days stored on device") { page = SettingsPage.PRIVACY }
                     SectionLabel("About", topPadding = 30.dp, bottomPadding = 11.dp)
-                    SettingsMenuRow(FitIcon.MOON, "SCORES & METHODOLOGY", "How readiness and sleep are calculated") { page = SettingsPage.PRIVACY }
+                    SettingsMenuRow(FitIcon.MOON, "SCORES & METHODOLOGY", "How recovery and sleep are calculated") { page = SettingsPage.PRIVACY }
                     Text(
                         "SIMPLIFIED FIT  ·  VERSION 0.1.0",
                         color = FitColors.Muted,
@@ -1497,7 +1497,7 @@ private fun SettingsScreen(
                         Text("YOUR DATA STAYS YOURS", color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
                         Spacer(Modifier.height(9.dp))
                         Text(
-                            "Readiness and sleep scores are calculated locally from your sleep, HRV, and resting heart-rate signals. They are not medical scores.",
+                            "Recovery and sleep scores are calculated locally from your sleep, HRV, and resting heart-rate signals. They are not Google scores or medical scores.",
                             color = FitColors.White,
                             style = FitType.Body.copy(fontSize = 12.sp, lineHeight = 18.sp),
                         )

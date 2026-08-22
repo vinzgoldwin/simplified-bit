@@ -56,7 +56,7 @@ class AppModelTest {
             LocalDateTime.of(2026, 8, 14, 14, 35),
         )
 
-        assertTrue(context.contains("Readiness: 72/100 (high)"))
+        assertTrue(context.contains("Recovery estimate: 72/100 (high)"))
         assertTrue(context.contains("Overall recovery supports a normal or challenging workout"))
         assertTrue(context.contains("Use the components below to explain it, not score recovery again"))
         assertTrue(context.contains("HRV: 42.0 ms"))
@@ -78,11 +78,11 @@ class AppModelTest {
             LocalDateTime.of(2026, 8, 14, 14, 35),
         )
 
-        assertTrue(context.contains("Readiness: unavailable"))
+        assertTrue(context.contains("Recovery estimate: unavailable"))
         assertTrue(context.contains("Do not infer workout readiness from one metric alone"))
         assertTrue(context.contains("HRV: unavailable"))
         assertTrue(context.contains("Average sleep: unavailable"))
-        assertTrue(context.contains("Missing latest-day fields: readiness, sleep score"))
+        assertTrue(context.contains("Missing latest-day fields: recovery estimate, sleep score"))
     }
 
     @Test
