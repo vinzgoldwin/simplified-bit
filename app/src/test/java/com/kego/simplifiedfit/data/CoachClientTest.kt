@@ -71,39 +71,46 @@ class CoachClientTest {
             stream = true,
         )
 
-        assertEquals("medium", payload.getJSONObject("reasoning").getString("effort"))
+        assertEquals("none", payload.getJSONObject("reasoning").getString("effort"))
         assertFalse(payload.has("max_tokens"))
         assertFalse(payload.has("max_completion_tokens"))
     }
 
     @Test
-    fun `asks for short scannable markdown responses`() {
+    fun `keeps coach instructions concise and grounded`() {
         val prompt = coachPrompt(
             CoachRequest(
                 message = "How am I doing?",
                 healthContext = "Readiness: 90/100",
             ),
         )
+        val instructions = prompt.substringBefore("HEALTH SUMMARY")
 
-        assertTrue(prompt.contains("Lead with the real point in one short sentence"))
-        assertTrue(prompt.contains("Default to no more than 120 words"))
-        assertTrue(prompt.contains("use a Markdown bullet list"))
-        assertTrue(prompt.contains("Bold only important numbers and recommended actions"))
+        assertTrue(instructions.length < 1_000)
+        assertTrue(instructions.contains("sole source of personal facts"))
+        assertTrue(instructions.contains("overall assessment as the decision anchor"))
+        assertTrue(instructions.contains("components as explanations, not additional scores"))
+        assertTrue(instructions.contains("general wellness guidance, not diagnosis or treatment"))
     }
 
     @Test
-    fun `asks for a natural human coaching voice`() {
-        val prompt = coachPrompt(
+    fun `defines an interpretation first response contract`() {
+        val payload = OpenRouterCoachClient("test-key").openRouterPayload(
             CoachRequest(
                 message = "What should I focus on today?",
                 healthContext = "Readiness: 90/100",
             ),
+            stream = true,
         )
+        val schema = payload.getJSONObject("response_format")
+            .getJSONObject("json_schema")
+            .getJSONObject("schema")
+        val properties = schema.getJSONObject("properties")
+        val responseDescription = properties.getJSONObject("response").getString("description")
+        val suggestionItems = properties.getJSONObject("suggestions").getJSONObject("items")
 
-        assertTrue(prompt.contains("thoughtful person, not a customer-support bot"))
-        assertTrue(prompt.contains("Have an opinion when the evidence supports one"))
-        assertTrue(prompt.contains("supportive, practical choices rather than commands"))
-        assertTrue(prompt.contains("Avoid canned praise, promotional language, inflated claims"))
-        assertTrue(prompt.contains("silently remove anything that sounds obviously AI-generated"))
+        assertTrue(responseDescription.contains("Interpret measurements into meaning and action"))
+        assertTrue(responseDescription.contains("exact value only when the user asks"))
+        assertEquals(60, suggestionItems.getInt("maxLength"))
     }
 }

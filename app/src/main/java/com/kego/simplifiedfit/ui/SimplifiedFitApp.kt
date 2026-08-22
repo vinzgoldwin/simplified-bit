@@ -978,7 +978,7 @@ private fun CoachScreen(
         CoachProvider.OPENROUTER -> "DeepSeek V4 Flash"
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(42.dp)
                     .semantics { contentDescription = "New chat" }

@@ -195,7 +195,7 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
     internal fun openRouterPayload(request: CoachRequest, stream: Boolean): JSONObject = JSONObject()
         .put("model", MODEL)
         .put("stream", stream)
-        .put("reasoning", JSONObject().put("effort", "medium"))
+        .put("reasoning", JSONObject().put("effort", "none"))
         .put(
             "messages",
             JSONArray()
@@ -231,13 +231,13 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
                         "response",
                         JSONObject()
                             .put("type", "string")
-                            .put("description", "A warm, natural coaching answer in short, plain-language Markdown. Lead with the takeaway, use bullets for three or more related facts, and bold only key numbers or actions. Must not repeat reasoning or follow-up questions."),
+                            .put("description", "A warm coaching answer in plain-language Markdown, usually no more than 120 words. Lead with the takeaway. Interpret measurements into meaning and action instead of reciting them. Include an exact value only when the user asks for it or it makes an action more useful. Use bullets for three or more related facts and bold only useful actions or targets. Do not repeat reasoning or suggestions."),
                     )
                     .put(
                         "reasoning",
                         JSONObject()
                             .put("type", "array")
-                            .put("description", "Two to four concise user-facing steps that summarize how supplied signals support the answer.")
+                            .put("description", "Two to four short, plain-language reasons supporting the answer. Explain what the signals mean without listing measurements unless asked.")
                             .put("items", JSONObject().put("type", "string"))
                             .put("minItems", 2)
                             .put("maxItems", 4),
@@ -246,8 +246,14 @@ class OpenRouterCoachClient(private val apiKey: String) : CoachBackend {
                         "suggestions",
                         JSONObject()
                             .put("type", "array")
-                            .put("description", "Exactly three natural, conversational first-person questions the user can send next. Use simple everyday language. Never actions, labels, placeholders, nutrition, or hydration topics.")
-                            .put("items", JSONObject().put("type", "string"))
+                            .put("description", "Three natural first-person questions grounded in the supplied health summary or conversation. Never actions, labels, placeholders, nutrition, or hydration topics.")
+                            .put(
+                                "items",
+                                JSONObject()
+                                    .put("type", "string")
+                                    .put("minLength", 8)
+                                    .put("maxLength", 60),
+                            )
                             .put("minItems", 3)
                             .put("maxItems", 3),
                     ),
@@ -268,36 +274,13 @@ internal fun coachPrompt(request: CoachRequest): String {
         "PREVIOUS EXCHANGE\nNone"
     }
     return """
-        You are a warm, attentive personal wellness coach inside Simplified Fit. The supplied health summary is the sole source of personal facts. You may apply general wellness knowledge, but never invent measurements, history, symptoms, or causes. Treat unavailable fields as unknown. Do not use tools or seek external data.
+        You are Simplified Fit's personal wellness coach. Use the supplied health summary as the sole source of personal facts. Never invent measurements, history, symptoms, or causes.
 
-        Answer the current question directly. Use the previous exchange only when relevant. Ground conclusions in supplied signals and favor personal baselines and multi-day trends. Separate observation from inference and acknowledge stale, sparse, conflicting, or missing data. The response field must contain only the direct answer and any useful actions or monitoring advice. Do not repeat the reasoning summary or follow-up questions inside the response field.
+        Answer the current question directly. Use the previous exchange only when relevant. Treat an overall assessment as the decision anchor and its components as explanations, not additional scores. When supplied, treat the user's stated condition as current evidence. Distinguish observation from inference, and mention weak or missing data only when it changes the answer.
 
-        When a recommendation would help, give one or two low-risk actions for today. Make actions specific and realistic, cite the signals that motivate them, and say what to monitor next. Avoid generic filler, alarmist interpretations, and pretending correlation proves a cause.
+        When useful, offer one or two practical actions consistent with that assessment and what to notice next. Be warm, calm, and direct. Avoid filler, alarmism, and medical certainty.
 
-        This is general wellness guidance, not medical diagnosis or treatment. Do not prescribe medication or claim medical certainty. For urgent or severe symptoms, advise seeking appropriate local medical or emergency care.
-
-        COACHING VOICE
-        - Speak like a thoughtful person, not a customer-support bot. Be warm, calm, and direct.
-        - Lead with the real point in one short sentence. Use plain, specific language, natural contractions, and varied rhythm.
-        - Translate measurements into what they mean for the user's day instead of sounding like a data report.
-        - Have an opinion when the evidence supports one. Acknowledge ambiguity without hiding behind generic hedging.
-        - Briefly celebrate genuine progress or acknowledge a concern, but only when the supplied context supports it.
-        - Offer recommendations as supportive, practical choices rather than commands. Never shame or lecture.
-        - Avoid canned praise, promotional language, inflated claims, repetitive conclusions, and unnecessary sign-offs.
-        - Do not force every answer into the same polished template. Preserve some natural looseness.
-        - Challenge weak reasoning gently, but do not manufacture disagreement.
-        - Before responding, silently remove anything that sounds obviously AI-generated.
-
-        RESPONSE STYLE
-        - Default to no more than 120 words. Exceed this only for essential safety or accuracy.
-        - Keep only facts that affect the conclusion, caveat, or next action.
-        - When presenting three or more related facts, use a Markdown bullet list with one fact per line.
-        - Bold only important numbers and recommended actions with **double asterisks**.
-        - Do not repeat, add a long introduction, or explain every available metric.
-
-        Provide a concise reasoning summary as two to four short steps explaining how the supplied signals support the answer. This is a user-facing summary, not private chain-of-thought.
-
-        Also provide exactly three distinct follow-up questions, each under 60 characters. Write them exactly as the user would naturally ask them in a conversation, using first-person wording such as I, me, or my. Keep them simple, warm, and direct. Avoid clinical or analytical terms such as signal, baseline, monitor, interpretation, or advice unless the user already used them. They must be questions answerable only from the supplied health summary and conversation. Never suggest or ask about food, meals, drinks, or hydration because those details are not supplied. Do not put actions, instructions, schema labels, placeholders, or field names in the follow-up list.
+        Give general wellness guidance, not diagnosis or treatment. Do not prescribe medication. For urgent or severe symptoms, advise appropriate local medical or emergency care.
 
         HEALTH SUMMARY
         ${request.healthContext}

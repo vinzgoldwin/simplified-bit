@@ -56,6 +56,9 @@ class AppModelTest {
             LocalDateTime.of(2026, 8, 14, 14, 35),
         )
 
+        assertTrue(context.contains("Readiness: 72/100 (high)"))
+        assertTrue(context.contains("Overall recovery supports a normal or challenging workout"))
+        assertTrue(context.contains("Use the components below to explain it, not score recovery again"))
         assertTrue(context.contains("HRV: 42.0 ms"))
         assertTrue(context.contains("HRV 28-day baseline: 50.0 ms from 1 prior day"))
         assertTrue(context.contains("Deep: 72 min"))
@@ -76,8 +79,26 @@ class AppModelTest {
         )
 
         assertTrue(context.contains("Readiness: unavailable"))
+        assertTrue(context.contains("Do not infer workout readiness from one metric alone"))
         assertTrue(context.contains("HRV: unavailable"))
         assertTrue(context.contains("Average sleep: unavailable"))
         assertTrue(context.contains("Missing latest-day fields: readiness, sleep score"))
+    }
+
+    @Test
+    fun `coach context anchors training advice to overall readiness`() {
+        val date = LocalDate.of(2026, 8, 14)
+        val cases = listOf(
+            80 to "supports a normal or challenging workout",
+            50 to "A normal workout is reasonable",
+            20 to "Favor rest or light activity",
+        )
+
+        cases.forEach { (score, guidance) ->
+            val current = DailyHealth(date = date, readinessScore = score)
+            val context = buildCoachContext(listOf(current), current, null)
+
+            assertTrue(context.contains(guidance))
+        }
     }
 }
