@@ -502,7 +502,7 @@ private fun ActivityDetailScreen(activity: ActivitySummary, onBack: () -> Unit) 
     }
 }
 
-private data class ActivityMetric(val label: String, val value: String, val unit: String = "")
+internal data class ActivityMetric(val label: String, val value: String, val unit: String = "")
 
 @Composable
 private fun ActivityDetailMetric(metric: ActivityMetric, modifier: Modifier = Modifier) {
@@ -519,9 +519,9 @@ private fun ActivityDetailMetric(metric: ActivityMetric, modifier: Modifier = Mo
     }
 }
 
-private fun activityDetailMetrics(activity: ActivitySummary): List<ActivityMetric> {
+internal fun activityDetailMetrics(activity: ActivitySummary): List<ActivityMetric> {
     val duration = ActivityMetric("Active time", formatActivityDetailDuration(activity.activeDurationSeconds))
-    val distance = activity.distanceMeters?.takeIf { it > 0 }?.let {
+    val distance = activity.distanceMeters?.takeIf { it > 0 && supportsActivityDistance(activity.type) }?.let {
         if (it >= 1_000) {
             ActivityMetric("Distance", String.format(Locale.US, "%.1f", it / 1_000.0), "km")
         } else {
@@ -532,24 +532,33 @@ private fun activityDetailMetrics(activity: ActivitySummary): List<ActivityMetri
     val heartRate = activity.averageHeartRate?.let { ActivityMetric("Average heart rate", it.toString(), "bpm") }
     val steps = activity.steps?.let { ActivityMetric("Steps", it.formatted()) }
     val zoneMinutes = activity.activeZoneMinutes?.let { ActivityMetric("Active zone minutes", it.toString(), "min") }
-    val elevation = activity.elevationGainMeters?.takeIf { it > 0 }?.let { ActivityMetric("Elevation gain", it.roundToInt().formatted(), "m") }
-    val speed = activity.averageSpeedMetersPerSecond?.takeIf { it > 0 }
+    val elevation = activity.elevationGainMeters?.takeIf { it > 0 && supportsActivityDistance(activity.type) }
+        ?.let { ActivityMetric("Elevation gain", it.roundToInt().formatted(), "m") }
+    val speed = activity.averageSpeedMetersPerSecond?.takeIf { it > 0 && supportsActivityDistance(activity.type) }
         ?.let { ActivityMetric("Average speed", String.format(Locale.US, "%.1f", it * 3.6), "km/h") }
-    val paceSeconds = activity.averagePaceSeconds?.takeIf { it in 60.0..3_600.0 }
-        ?: activity.distanceMeters?.takeIf { it > 0 }?.let { activity.activeDurationSeconds / (it / 1_000.0) }
+    val paceSeconds = if (supportsActivityPace(activity.type)) {
+        activity.averagePaceSeconds?.takeIf { it in 60.0..3_600.0 }
+            ?: activity.distanceMeters
+                ?.takeIf { it > 0 }
+                ?.let { activity.activeDurationSeconds / (it / 1_000.0) }
+                ?.takeIf { it in 60.0..3_600.0 }
+    } else {
+        null
+    }
     val pace = paceSeconds?.let { ActivityMetric("Average pace", formatActivityPace(it), "/km") }
 
     val ordered = when (activityIcon(activity.type)) {
         FitIcon.RUN, FitIcon.WALK -> listOf(distance, pace, duration, elevation, calories, heartRate, steps, zoneMinutes)
         FitIcon.BIKE -> listOf(distance, speed, duration, elevation, calories, heartRate, zoneMinutes)
         FitIcon.STRENGTH -> listOf(duration, calories, heartRate, zoneMinutes, steps)
-        else -> listOf(duration, calories, heartRate, zoneMinutes, distance, pace ?: speed, steps, elevation)
+        else -> listOf(duration, calories, heartRate, zoneMinutes, distance, speed, steps, elevation)
     }
     return ordered.filterNotNull()
 }
 
-private fun activityListMetric(activity: ActivitySummary): String {
-    val distance = activity.distanceMeters?.takeIf { it > 0 }?.let(::formatActivityDistance)
+internal fun activityListMetric(activity: ActivitySummary): String {
+    val distance = activity.distanceMeters?.takeIf { it > 0 && supportsActivityDistance(activity.type) }
+        ?.let(::formatActivityDistance)
     val calories = activity.caloriesKcal?.let { "${it.formatted()} kcal" }
     val steps = activity.steps?.let { "${it.formatted()} steps" }
     val heartRate = activity.averageHeartRate?.let { "$it bpm" }
@@ -557,7 +566,7 @@ private fun activityListMetric(activity: ActivitySummary): String {
 
     val metrics = when (activityIcon(activity.type)) {
         FitIcon.RUN, FitIcon.WALK, FitIcon.BIKE -> listOf(distance, calories, steps, heartRate)
-        FitIcon.STRENGTH -> listOf(calories, zoneMinutes, heartRate, steps, distance)
+        FitIcon.STRENGTH -> listOf(calories, zoneMinutes, heartRate, steps)
         else -> listOf(calories, distance, steps, heartRate, zoneMinutes)
     }
     return metrics.firstOrNull { it != null }.orEmpty()
@@ -574,6 +583,19 @@ private val cyclingActivityTypes = setOf(
     "STATIONARY_BIKE",
     "UNICYCLING",
 )
+
+internal fun supportsActivityPace(type: String): Boolean {
+    val normalized = type.uppercase()
+    return normalized.contains("WALK") || normalized == "HIKING" || normalized.contains("RUN") || normalized == "TREADMILL"
+}
+
+internal fun supportsActivityDistance(type: String): Boolean {
+    val normalized = type.uppercase()
+    val nonDistanceTypes = setOf("MOTORCYCLE", "WORKOUT", "CARDIO_WORKOUT")
+    val strengthType = listOf("STRENGTH", "WEIGHT", "POWERLIFT", "BODY_WEIGHT", "CALISTHENICS", "RESISTANCE")
+        .any(normalized::contains)
+    return normalized !in nonDistanceTypes && !strengthType
+}
 
 private fun activityIcon(type: String): FitIcon {
     val normalized = type.uppercase()

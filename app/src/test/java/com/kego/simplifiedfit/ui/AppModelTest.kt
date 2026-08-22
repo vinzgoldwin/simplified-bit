@@ -3,8 +3,10 @@ package com.kego.simplifiedfit.ui
 import com.kego.simplifiedfit.data.DailyHealth
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -27,6 +29,174 @@ class AppModelTest {
         assertEquals("1:04:12", formatActivityDuration(3_852))
         assertEquals("3h 13m", formatActivityTotalDuration(11_634))
         assertEquals("1:05:00", formatActivityDetailDuration(3_900))
+    }
+
+    @Test
+    fun `pace is limited to walking and running activities`() {
+        assertTrue(supportsActivityPace("WALKING"))
+        assertTrue(supportsActivityPace("TRAIL_RUN"))
+        assertTrue(supportsActivityPace("TREADMILL"))
+        assertFalse(supportsActivityPace("MOTORCYCLE"))
+        assertFalse(supportsActivityPace("BIKING"))
+        assertFalse(supportsActivityPace("STRENGTH_TRAINING"))
+        assertFalse(supportsActivityDistance("MOTORCYCLE"))
+        assertFalse(supportsActivityDistance("WORKOUT"))
+        assertFalse(supportsActivityDistance("CARDIO_WORKOUT"))
+        assertFalse(supportsActivityDistance("STRENGTH_TRAINING"))
+        assertTrue(supportsActivityDistance("WALKING"))
+        assertTrue(supportsActivityDistance("ROWING"))
+    }
+
+    @Test
+    fun `motorcycle details exclude movement sensor artifacts`() {
+        val metrics = activityDetailMetrics(
+            activity(
+                type = "MOTORCYCLE",
+                distanceMeters = 10.0,
+                averageSpeedMetersPerSecond = 0.005,
+                averagePaceSeconds = 199_278.0,
+                elevationGainMeters = 12.0,
+            ),
+        )
+
+        assertEquals(
+            listOf("Active time", "Active energy", "Average heart rate", "Active zone minutes"),
+            metrics.map(ActivityMetric::label),
+        )
+    }
+
+    @Test
+    fun `motorcycle cards never fall back to sensor distance`() {
+        val motorcycle = activity(
+            type = "MOTORCYCLE",
+            caloriesKcal = null,
+            distanceMeters = 10.0,
+            averageHeartRate = null,
+            activeZoneMinutes = null,
+        )
+
+        assertEquals("", activityListMetric(motorcycle))
+    }
+
+    @Test
+    fun `walking details prefer pace and include walking metrics`() {
+        val metrics = activityDetailMetrics(
+            activity(
+                type = "WALKING",
+                distanceMeters = 3_700.0,
+                steps = 5_441,
+                averageSpeedMetersPerSecond = 1.15,
+                averagePaceSeconds = 875.0,
+                elevationGainMeters = 42.0,
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "Distance",
+                "Average pace",
+                "Active time",
+                "Elevation gain",
+                "Active energy",
+                "Average heart rate",
+                "Steps",
+                "Active zone minutes",
+            ),
+            metrics.map(ActivityMetric::label),
+        )
+        assertEquals(ActivityMetric("Average pace", "14:35", "/km"), metrics[1])
+    }
+
+    @Test
+    fun `walking details reject an implausible derived pace`() {
+        val metrics = activityDetailMetrics(
+            activity(
+                type = "WALKING",
+                distanceMeters = 10.0,
+                averagePaceSeconds = null,
+            ),
+        )
+
+        assertFalse(metrics.any { it.label == "Average pace" })
+    }
+
+    @Test
+    fun `cycling details use speed instead of pace`() {
+        val metrics = activityDetailMetrics(
+            activity(
+                type = "BIKING",
+                distanceMeters = 12_400.0,
+                averageSpeedMetersPerSecond = 5.0,
+                averagePaceSeconds = 200.0,
+                elevationGainMeters = 85.0,
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "Distance",
+                "Average speed",
+                "Active time",
+                "Elevation gain",
+                "Active energy",
+                "Average heart rate",
+                "Active zone minutes",
+            ),
+            metrics.map(ActivityMetric::label),
+        )
+        assertFalse(metrics.any { it.label == "Average pace" })
+    }
+
+    @Test
+    fun `strength and cardio details only show relevant available data`() {
+        val strength = activityDetailMetrics(
+            activity(
+                type = "STRENGTH_TRAINING",
+                distanceMeters = 250.0,
+                steps = 40,
+                averageSpeedMetersPerSecond = 1.0,
+                elevationGainMeters = 5.0,
+            ),
+        )
+        val cardio = activityDetailMetrics(activity(type = "CARDIO_WORKOUT"))
+
+        assertEquals(
+            listOf("Active time", "Active energy", "Average heart rate", "Active zone minutes", "Steps"),
+            strength.map(ActivityMetric::label),
+        )
+        assertEquals(
+            listOf("Active time", "Active energy", "Average heart rate", "Active zone minutes"),
+            cardio.map(ActivityMetric::label),
+        )
+    }
+
+    @Test
+    fun `other distance activities use speed without inventing pace`() {
+        val metrics = activityDetailMetrics(
+            activity(
+                type = "ROWING",
+                distanceMeters = 2_000.0,
+                steps = 300,
+                averageSpeedMetersPerSecond = 2.5,
+                averagePaceSeconds = 400.0,
+                elevationGainMeters = 3.0,
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "Active time",
+                "Active energy",
+                "Average heart rate",
+                "Active zone minutes",
+                "Distance",
+                "Average speed",
+                "Steps",
+                "Elevation gain",
+            ),
+            metrics.map(ActivityMetric::label),
+        )
+        assertFalse(metrics.any { it.label == "Average pace" })
     }
 
     @Test
@@ -110,4 +280,30 @@ class AppModelTest {
             assertTrue(context.contains(guidance))
         }
     }
+
+    private fun activity(
+        type: String,
+        caloriesKcal: Int? = 150,
+        distanceMeters: Double? = null,
+        steps: Int? = null,
+        averageHeartRate: Int? = 120,
+        activeZoneMinutes: Int? = 12,
+        averageSpeedMetersPerSecond: Double? = null,
+        averagePaceSeconds: Double? = null,
+        elevationGainMeters: Double? = null,
+    ) = ActivitySummary(
+        id = "activity-$type",
+        startTime = Instant.parse("2026-08-22T06:00:00Z"),
+        type = type,
+        name = type.lowercase(),
+        activeDurationSeconds = 1_800,
+        caloriesKcal = caloriesKcal,
+        distanceMeters = distanceMeters,
+        steps = steps,
+        averageHeartRate = averageHeartRate,
+        activeZoneMinutes = activeZoneMinutes,
+        averageSpeedMetersPerSecond = averageSpeedMetersPerSecond,
+        averagePaceSeconds = averagePaceSeconds,
+        elevationGainMeters = elevationGainMeters,
+    )
 }
