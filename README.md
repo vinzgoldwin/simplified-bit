@@ -15,7 +15,7 @@ Google Health does not expose its readiness or Fitbit sleep scores through the A
 
 ## Install the Android app
 
-The ready-to-sideload APK is in `dist/SimplifiedFit-0.1.0.apk`.
+The ready-to-sideload APK is in `dist/SimplifiedFit.apk`.
 
 1. Copy it to the Android phone.
 2. Allow installs from the file manager when Android asks.
@@ -26,7 +26,7 @@ To rebuild:
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-./gradlew testDebugUnitTest assembleDebug
+./gradlew testDebugUnitTest :app:publishReleaseApk
 ```
 
 The delivered APK is signed with the local key in `signing/simplified-fit.jks`. Preserve that key and `release.properties`; Android requires the same key for future in-place upgrades.
