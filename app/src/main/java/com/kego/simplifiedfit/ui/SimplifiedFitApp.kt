@@ -85,7 +85,9 @@ import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
 import kotlinx.coroutines.delay
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -106,10 +108,13 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         var destination by remember { mutableStateOf(Destination.TODAY) }
         var detail by remember { mutableStateOf<Detail?>(null) }
         var detailParent by remember { mutableStateOf<Detail?>(null) }
+        var activityDetail by remember { mutableStateOf<ActivitySummary?>(null) }
         var settings by remember { mutableStateOf(false) }
 
-        BackHandler(detail != null || settings) {
-            if (settings) {
+        BackHandler(activityDetail != null || detail != null || settings) {
+            if (activityDetail != null) {
+                activityDetail = null
+            } else if (settings) {
                 settings = false
             } else {
                 detail = detailParent
@@ -120,6 +125,7 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().background(FitColors.Black)) {
             MatteTexture(settings, darkTheme)
             when {
+                activityDetail != null -> ActivityDetailScreen(activityDetail!!, onBack = { activityDetail = null })
                 settings -> SettingsScreen(
                     viewModel = viewModel,
                     state = state,
@@ -151,6 +157,13 @@ fun SimplifiedFitApp(viewModel: AppViewModel = viewModel()) {
                     },
                     onSync = viewModel::sync,
                     onSettings = { settings = true },
+                    onDestination = { destination = it },
+                )
+                destination == Destination.ACTIVITIES -> ActivitiesScreen(
+                    state = state,
+                    onSettings = { settings = true },
+                    onSync = viewModel::sync,
+                    onActivity = { activityDetail = it },
                     onDestination = { destination = it },
                 )
                 else -> CoachScreen(
@@ -263,6 +276,362 @@ private fun TodayScreen(
         }
         BottomNav(Destination.TODAY, onDestination)
     }
+}
+
+private enum class ActivityRange { TODAY, SEVEN_DAYS, THIRTY_DAYS }
+
+@Composable
+private fun ActivitiesScreen(
+    state: AppUiState,
+    onSettings: () -> Unit,
+    onSync: () -> Unit,
+    onActivity: (ActivitySummary) -> Unit,
+    onDestination: (Destination) -> Unit,
+) {
+    var range by rememberSaveable { mutableStateOf(ActivityRange.THIRTY_DAYS) }
+    val today = LocalDate.now()
+    val zoneId = ZoneId.systemDefault()
+    val startDate = when (range) {
+        ActivityRange.TODAY -> today
+        ActivityRange.SEVEN_DAYS -> today.minusDays(6)
+        ActivityRange.THIRTY_DAYS -> today.minusDays(29)
+    }
+    val activities = state.activities
+        .filter { activity ->
+            val date = activity.startTime.atZone(zoneId).toLocalDate()
+            !date.isBefore(startDate) && !date.isAfter(today)
+        }
+        .sortedByDescending(ActivitySummary::startTime)
+
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        AppHeader("Activities", onSettings = onSettings)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            ActivityRangeTabs(range, onRange = { range = it })
+            ActivityTotals(activities)
+            when {
+                activities.isNotEmpty() -> ActivityHistory(activities, zoneId, onActivity)
+                !state.googleConnected -> ActivityEmptyState(
+                    title = "Google Health not connected",
+                    body = "Connect Google Health to load recorded workouts.",
+                    action = "SET UP",
+                    onClick = onSettings,
+                )
+                else -> ActivityEmptyState(
+                    title = if (state.syncing) "Syncing activities" else "No activities",
+                    body = if (state.syncing) {
+                        "Recorded workouts will appear when Google Health finishes syncing."
+                    } else {
+                        "No recorded workouts were found in this period."
+                    },
+                    action = if (state.syncing) null else "SYNC NOW",
+                    onClick = onSync,
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+        }
+        BottomNav(Destination.ACTIVITIES, onDestination)
+    }
+}
+
+@Composable
+private fun ActivityRangeTabs(selected: ActivityRange, onRange: (ActivityRange) -> Unit) {
+    val tabs = listOf(
+        ActivityRange.TODAY to "TODAY",
+        ActivityRange.SEVEN_DAYS to "7 DAYS",
+        ActivityRange.THIRTY_DAYS to "30 DAYS",
+    )
+    Column(Modifier.fillMaxWidth().padding(horizontal = 15.dp)) {
+        Row(Modifier.fillMaxWidth().height(43.dp)) {
+            tabs.forEach { (range, label) ->
+                val active = selected == range
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().clickable { onRange(range) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Bottom,
+                ) {
+                    Text(
+                        label,
+                        color = if (active) FitColors.White else FitColors.Muted,
+                        style = FitType.Eyebrow.copy(fontSize = 9.sp, letterSpacing = 1.2.sp),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.width(46.dp).height(2.dp).background(if (active) FitColors.Green else Color.Transparent))
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(FitColors.Rule))
+    }
+}
+
+@Composable
+private fun ActivityTotals(activities: List<ActivitySummary>) {
+    val duration = activities.sumOf(ActivitySummary::activeDurationSeconds)
+    val calories = activities.sumOf { it.caloriesKcal ?: 0 }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 19.dp)) {
+        ActivityTotal(activities.size.toString(), "Activities", Modifier.weight(1f))
+        ActivityTotal(formatActivityTotalDuration(duration), "Active time", Modifier.weight(1f))
+        ActivityTotal(calories.formatted(), "Active kcal", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ActivityTotal(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = FitColors.White, fontSize = 23.sp, fontWeight = FontWeight.Medium, letterSpacing = (-.7).sp)
+        Spacer(Modifier.height(5.dp))
+        Text(label.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = 1.2.sp))
+    }
+}
+
+@Composable
+private fun ActivityHistory(
+    activities: List<ActivitySummary>,
+    zoneId: ZoneId,
+    onActivity: (ActivitySummary) -> Unit,
+) {
+    val today = LocalDate.now()
+    val weekStart = today.minusDays(today.dayOfWeek.value - 1L)
+    val thisWeek = activities.filter { !it.startTime.atZone(zoneId).toLocalDate().isBefore(weekStart) }
+    val earlier = activities - thisWeek.toSet()
+    Column(Modifier.padding(horizontal = 15.dp)) {
+        if (thisWeek.isNotEmpty()) {
+            SectionLabel("This week", trailing = activityCountLabel(thisWeek.size), topPadding = 3.dp, bottomPadding = 9.dp)
+            thisWeek.forEach { activity ->
+                ActivityHistoryCard(activity, zoneId, onClick = { onActivity(activity) })
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        if (earlier.isNotEmpty()) {
+            SectionLabel("Earlier", trailing = activityCountLabel(earlier.size), topPadding = 13.dp, bottomPadding = 9.dp)
+            earlier.forEach { activity ->
+                ActivityHistoryCard(activity, zoneId, onClick = { onActivity(activity) })
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityHistoryCard(activity: ActivitySummary, zoneId: ZoneId, onClick: () -> Unit) {
+    val icon = activityIcon(activity.type)
+    val color = activityColor(icon)
+    val keyMetric = activityListMetric(activity)
+    val date = activity.startTime.atZone(zoneId)
+    Row(
+        Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).clickable(onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(36.dp).border(1.dp, FitColors.Rule, CircleShape), contentAlignment = Alignment.Center) {
+            OutlineIcon(icon, color, 18.dp)
+        }
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(activity.name.uppercase(), color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 9.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (keyMetric.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(keyMetric, color = FitColors.White, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                date.format(DateTimeFormatter.ofPattern("EEE d · H:mm", Locale.ENGLISH)).uppercase(),
+                color = FitColors.Muted,
+                style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = .6.sp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(formatActivityDuration(activity.activeDurationSeconds), color = FitColors.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(5.dp))
+            Text("›", color = FitColors.White, fontSize = 19.sp)
+        }
+    }
+}
+
+@Composable
+private fun ActivityEmptyState(
+    title: String,
+    body: String,
+    action: String?,
+    onClick: () -> Unit,
+) {
+    Column(Modifier.padding(horizontal = 15.dp, vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().background(FitColors.Surface, RoundedCornerShape(10.dp)).padding(15.dp)) {
+            Text(title.uppercase(), color = FitColors.White, style = FitType.Eyebrow.copy(fontSize = 10.sp))
+            Spacer(Modifier.height(8.dp))
+            Text(body, color = FitColors.White, style = FitType.Body.copy(fontSize = 12.sp, lineHeight = 17.sp))
+            action?.let {
+                Spacer(Modifier.height(11.dp))
+                Text("$it  ›", color = FitColors.Green, style = FitType.Eyebrow.copy(fontSize = 9.sp), modifier = Modifier.clickable(onClick = onClick))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityDetailScreen(activity: ActivitySummary, onBack: () -> Unit) {
+    val zoneId = ZoneId.systemDefault()
+    val date = activity.startTime.atZone(zoneId)
+        .format(DateTimeFormatter.ofPattern("EEE, d MMM · H:mm", Locale.ENGLISH))
+        .uppercase()
+    val metrics = activityDetailMetrics(activity)
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        AppHeader("Activity", onBack = onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 15.dp)) {
+            Text(
+                activity.name.uppercase(),
+                color = FitColors.White,
+                style = FitType.Eyebrow.copy(fontSize = 15.sp, letterSpacing = 1.3.sp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(date, color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp, letterSpacing = .8.sp))
+            Spacer(Modifier.height(28.dp))
+            metrics.chunked(2).forEachIndexed { index, rowMetrics ->
+                Row(Modifier.fillMaxWidth()) {
+                    rowMetrics.forEach { metric ->
+                        ActivityDetailMetric(metric, Modifier.weight(1f))
+                    }
+                    if (rowMetrics.size == 1) Spacer(Modifier.weight(1f))
+                }
+                if (index < metrics.lastIndex / 2) Spacer(Modifier.height(23.dp))
+            }
+            Spacer(Modifier.height(18.dp))
+        }
+    }
+}
+
+private data class ActivityMetric(val label: String, val value: String, val unit: String = "")
+
+@Composable
+private fun ActivityDetailMetric(metric: ActivityMetric, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(metric.label.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = .8.sp))
+        Spacer(Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(metric.value, color = FitColors.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            if (metric.unit.isNotEmpty()) {
+                Spacer(Modifier.width(4.dp))
+                Text(metric.unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp), modifier = Modifier.padding(bottom = 2.dp))
+            }
+        }
+    }
+}
+
+private fun activityDetailMetrics(activity: ActivitySummary): List<ActivityMetric> {
+    val duration = ActivityMetric("Active time", formatActivityDetailDuration(activity.activeDurationSeconds))
+    val distance = activity.distanceMeters?.takeIf { it > 0 }?.let {
+        if (it >= 1_000) {
+            ActivityMetric("Distance", String.format(Locale.US, "%.1f", it / 1_000.0), "km")
+        } else {
+            ActivityMetric("Distance", it.roundToInt().formatted(), "m")
+        }
+    }
+    val calories = activity.caloriesKcal?.let { ActivityMetric("Active energy", it.formatted(), "kcal") }
+    val heartRate = activity.averageHeartRate?.let { ActivityMetric("Average heart rate", it.toString(), "bpm") }
+    val steps = activity.steps?.let { ActivityMetric("Steps", it.formatted()) }
+    val zoneMinutes = activity.activeZoneMinutes?.let { ActivityMetric("Active zone minutes", it.toString(), "min") }
+    val elevation = activity.elevationGainMeters?.takeIf { it > 0 }?.let { ActivityMetric("Elevation gain", it.roundToInt().formatted(), "m") }
+    val speed = activity.averageSpeedMetersPerSecond?.takeIf { it > 0 }
+        ?.let { ActivityMetric("Average speed", String.format(Locale.US, "%.1f", it * 3.6), "km/h") }
+    val paceSeconds = activity.averagePaceSeconds?.takeIf { it in 60.0..3_600.0 }
+        ?: activity.distanceMeters?.takeIf { it > 0 }?.let { activity.activeDurationSeconds / (it / 1_000.0) }
+    val pace = paceSeconds?.let { ActivityMetric("Average pace", formatActivityPace(it), "/km") }
+
+    val ordered = when (activityIcon(activity.type)) {
+        FitIcon.RUN, FitIcon.WALK -> listOf(distance, pace, duration, elevation, calories, heartRate, steps, zoneMinutes)
+        FitIcon.BIKE -> listOf(distance, speed, duration, elevation, calories, heartRate, zoneMinutes)
+        FitIcon.STRENGTH -> listOf(duration, calories, heartRate, zoneMinutes, steps)
+        else -> listOf(duration, calories, heartRate, zoneMinutes, distance, pace ?: speed, steps, elevation)
+    }
+    return ordered.filterNotNull()
+}
+
+private fun activityListMetric(activity: ActivitySummary): String {
+    val distance = activity.distanceMeters?.takeIf { it > 0 }?.let(::formatActivityDistance)
+    val calories = activity.caloriesKcal?.let { "${it.formatted()} kcal" }
+    val steps = activity.steps?.let { "${it.formatted()} steps" }
+    val heartRate = activity.averageHeartRate?.let { "$it bpm" }
+    val zoneMinutes = activity.activeZoneMinutes?.let { "$it zone min" }
+
+    val metrics = when (activityIcon(activity.type)) {
+        FitIcon.RUN, FitIcon.WALK, FitIcon.BIKE -> listOf(distance, calories, steps, heartRate)
+        FitIcon.STRENGTH -> listOf(calories, zoneMinutes, heartRate, steps, distance)
+        else -> listOf(calories, distance, steps, heartRate, zoneMinutes)
+    }
+    return metrics.firstOrNull { it != null }.orEmpty()
+}
+
+private val cyclingActivityTypes = setOf(
+    "ASSAULT_BIKE",
+    "BIKING",
+    "ELECTRIC_BIKE",
+    "HAND_CYCLING",
+    "MOUNTAIN_BIKE",
+    "OUTDOOR_BIKE",
+    "SPINNING",
+    "STATIONARY_BIKE",
+    "UNICYCLING",
+)
+
+private fun activityIcon(type: String): FitIcon {
+    val normalized = type.uppercase()
+    return when {
+        normalized in cyclingActivityTypes -> FitIcon.BIKE
+        normalized.contains("WALK") || normalized == "HIKING" -> FitIcon.WALK
+        normalized.contains("RUN") || normalized == "TREADMILL" -> FitIcon.RUN
+        listOf("STRENGTH", "WEIGHT", "POWERLIFT", "BODY_WEIGHT", "CALISTHENICS", "RESISTANCE").any(normalized::contains) -> FitIcon.STRENGTH
+        else -> FitIcon.ACTIVITY
+    }
+}
+
+@Composable
+private fun activityColor(icon: FitIcon): Color = when (icon) {
+    FitIcon.RUN -> FitColors.Cyan
+    FitIcon.WALK -> FitColors.Green
+    FitIcon.BIKE -> FitColors.Violet
+    FitIcon.STRENGTH -> FitColors.Coral
+    else -> FitColors.Muted
+}
+
+internal fun formatActivityDuration(seconds: Long): String {
+    val safeSeconds = seconds.coerceAtLeast(0)
+    val hours = safeSeconds / 3_600
+    val minutes = safeSeconds % 3_600 / 60
+    val remainder = safeSeconds % 60
+    return when {
+        hours > 0 && remainder == 0L -> "${hours}h ${minutes}m"
+        hours > 0 -> "%d:%02d:%02d".format(hours, minutes, remainder)
+        else -> "%d:%02d".format(minutes, remainder)
+    }
+}
+
+internal fun formatActivityDetailDuration(seconds: Long): String {
+    val safeSeconds = seconds.coerceAtLeast(0)
+    val hours = safeSeconds / 3_600
+    val minutes = safeSeconds % 3_600 / 60
+    val remainder = safeSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, remainder) else "%d:%02d".format(minutes, remainder)
+}
+
+internal fun formatActivityTotalDuration(seconds: Long): String {
+    val safeSeconds = seconds.coerceAtLeast(0)
+    val hours = safeSeconds / 3_600
+    val minutes = safeSeconds % 3_600 / 60
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+}
+
+private fun activityCountLabel(count: Int): String = "$count ${if (count == 1) "activity" else "activities"}"
+
+private fun formatActivityDistance(meters: Double): String = when {
+    meters >= 1_000 -> String.format(Locale.US, "%.1f km", meters / 1_000.0)
+    else -> "${meters.roundToInt()} m"
+}
+
+private fun formatActivityPace(seconds: Double): String {
+    val total = seconds.roundToInt().coerceAtLeast(0)
+    return "%d:%02d".format(total / 60, total % 60)
 }
 
 @Composable
@@ -435,6 +804,7 @@ private fun BottomNav(selected: Destination?, onDestination: (Destination) -> Un
     Column(Modifier.background(FitColors.Navigation).navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(67.dp)) {
             NavItem("Today", FitIcon.CALENDAR, selected == Destination.TODAY, Modifier.weight(1f)) { onDestination(Destination.TODAY) }
+            NavItem("Activities", FitIcon.ACTIVITY, selected == Destination.ACTIVITIES, Modifier.weight(1f)) { onDestination(Destination.ACTIVITIES) }
             NavItem("Coach", FitIcon.COACH, selected == Destination.COACH, Modifier.weight(1f)) { onDestination(Destination.COACH) }
         }
     }
@@ -796,10 +1166,10 @@ private data class SleepBreakdownItem(val label: String, val value: Int, val ico
 private fun SleepBreakdown(breakdown: SleepScoreBreakdown) {
     val items = listOfNotNull(
         SleepBreakdownItem("Duration", breakdown.duration, FitIcon.CLOCK),
-        SleepBreakdownItem("Restfulness", breakdown.continuity, FitIcon.WAVES),
-        breakdown.restlessness?.let { SleepBreakdownItem("Restlessness", it, FitIcon.WAVES) },
-        breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.MOON) },
-        breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.MOON) },
+        SleepBreakdownItem("Restfulness", breakdown.continuity, FitIcon.RESTFULNESS),
+        breakdown.restlessness?.let { SleepBreakdownItem("Restlessness", it, FitIcon.RESTLESSNESS) },
+        breakdown.rem?.let { SleepBreakdownItem("REM", it, FitIcon.REM) },
+        breakdown.deep?.let { SleepBreakdownItem("Deep", it, FitIcon.DEEP) },
     )
     if (items.isEmpty()) {
         Text("Not enough sleep data to calculate a breakdown.", color = FitColors.Muted, style = FitType.Body)

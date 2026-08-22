@@ -9,6 +9,7 @@ A private Android health dashboard for Fitbit data, with a choice of direct Open
 - Sleep score
 - Latest and resting heart rate
 - Daily total and active calories
+- Recorded activities with Today, 7-day, and 30-day history
 - A focused Coach using OpenRouter or the local Codex companion
 
 Google Health does not expose its readiness or Fitbit sleep scores through the API, so both are calculated locally. The recovery estimate is an independent wellness indicator rather than a copy of Google's proprietary score. It requires seven valid sleep nights before a score appears, and its personal baseline keeps improving through 28 days.

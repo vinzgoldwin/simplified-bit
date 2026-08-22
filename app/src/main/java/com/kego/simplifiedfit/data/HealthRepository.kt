@@ -12,9 +12,12 @@ class HealthRepository(
 ) {
     fun recent(): List<DailyHealth> = database.recent()
 
+    fun recentActivities(): List<ExerciseSession> = database.recentActivities()
+
     fun sync(): List<DailyHealth> {
         val credentials = secureStore.googleCredentials() ?: return recent()
         val batch = GoogleHealthClient(credentials).fetch()
+        database.replaceActivities(batch.activities)
         val existing = recent().associateBy { it.date }
         val dates = buildSet {
             addAll(existing.keys)

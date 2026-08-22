@@ -146,7 +146,11 @@ fun MetricRow(
     }
 }
 
-enum class FitIcon { STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, BACK, SEND, CLOCK, WAVES, MOON, CALENDAR, ADD }
+enum class FitIcon {
+    STEPS, HEART, FIRE, TODAY, COACH, SETTINGS, SUN, BACK, SEND, CLOCK,
+    WAVES, MOON, RESTFULNESS, RESTLESSNESS, REM, DEEP, CALENDAR, ADD,
+    ACTIVITY, RUN, WALK, BIKE, STRENGTH,
+}
 
 @Composable
 fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
@@ -156,21 +160,29 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
         val stroke = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round)
         when (icon) {
             FitIcon.STEPS -> {
-                val p = Path().apply {
-                    moveTo(w * .12f, h * .56f)
-                    lineTo(w * .34f, h * .28f)
-                    lineTo(w * .54f, h * .43f)
-                    lineTo(w * .72f, h * .27f)
-                    lineTo(w * .92f, h * .44f)
-                    lineTo(w * .73f, h * .63f)
-                    lineTo(w * .92f, h * .79f)
-                    lineTo(w * .92f, h * .94f)
-                    lineTo(w * .53f, h * .94f)
-                    lineTo(w * .34f, h * .75f)
-                    lineTo(w * .12f, h * .75f)
+                val shoe = Path().apply {
+                    moveTo(w * .08f, h * .48f)
+                    lineTo(w * .24f, h * .25f)
+                    cubicTo(w * .27f, h * .21f, w * .32f, h * .21f, w * .36f, h * .24f)
+                    lineTo(w * .49f, h * .35f)
+                    lineTo(w * .58f, h * .29f)
+                    lineTo(w * .69f, h * .38f)
+                    lineTo(w * .63f, h * .47f)
+                    lineTo(w * .83f, h * .59f)
+                    cubicTo(w * .91f, h * .63f, w * .95f, h * .69f, w * .95f, h * .77f)
+                    lineTo(w * .95f, h * .80f)
+                    cubicTo(w * .95f, h * .87f, w * .90f, h * .91f, w * .82f, h * .91f)
+                    lineTo(w * .37f, h * .91f)
+                    cubicTo(w * .31f, h * .91f, w * .26f, h * .88f, w * .22f, h * .84f)
+                    lineTo(w * .08f, h * .68f)
+                    cubicTo(w * .03f, h * .62f, w * .03f, h * .54f, w * .08f, h * .48f)
                     close()
                 }
-                drawPath(p, color, style = stroke)
+                val shoeStroke = Stroke(width = stroke.width, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                drawPath(shoe, color, style = shoeStroke)
+                drawLine(color, Offset(w * .30f, h * .75f), Offset(w * .88f, h * .75f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .43f, h * .43f), Offset(w * .53f, h * .50f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .51f, h * .39f), Offset(w * .61f, h * .46f), stroke.width, StrokeCap.Round)
             }
             FitIcon.HEART -> {
                 val p = Path().apply {
@@ -191,6 +203,52 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
                     cubicTo(w * .42f, h * .37f, w * .57f, h * .43f, w * .52f, h * .05f)
                 }
                 drawPath(p, color, style = stroke)
+            }
+            FitIcon.ACTIVITY -> {
+                val activity = Path().apply {
+                    moveTo(w * .06f, h * .55f)
+                    lineTo(w * .25f, h * .55f)
+                    lineTo(w * .35f, h * .24f)
+                    lineTo(w * .52f, h * .82f)
+                    lineTo(w * .64f, h * .42f)
+                    lineTo(w * .73f, h * .62f)
+                    lineTo(w * .94f, h * .62f)
+                }
+                drawPath(activity, color, style = stroke)
+            }
+            FitIcon.RUN -> {
+                drawCircle(color, w * .09f, Offset(w * .62f, h * .15f), style = stroke)
+                drawLine(color, Offset(w * .48f, h * .31f), Offset(w * .63f, h * .46f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .48f, h * .31f), Offset(w * .35f, h * .56f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .35f, h * .56f), Offset(w * .18f, h * .48f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .63f, h * .46f), Offset(w * .82f, h * .49f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .54f, h * .46f), Offset(w * .43f, h * .70f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .43f, h * .70f), Offset(w * .24f, h * .90f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .43f, h * .70f), Offset(w * .73f, h * .88f), stroke.width, StrokeCap.Round)
+            }
+            FitIcon.WALK -> {
+                drawCircle(color, w * .09f, Offset(w * .55f, h * .15f), style = stroke)
+                drawLine(color, Offset(w * .48f, h * .29f), Offset(w * .43f, h * .60f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .46f, h * .39f), Offset(w * .68f, h * .54f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .43f, h * .60f), Offset(w * .24f, h * .88f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .43f, h * .60f), Offset(w * .68f, h * .88f), stroke.width, StrokeCap.Round)
+            }
+            FitIcon.BIKE -> {
+                drawCircle(color, w * .20f, Offset(w * .23f, h * .70f), style = stroke)
+                drawCircle(color, w * .20f, Offset(w * .77f, h * .70f), style = stroke)
+                drawLine(color, Offset(w * .23f, h * .70f), Offset(w * .42f, h * .36f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .42f, h * .36f), Offset(w * .57f, h * .70f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .57f, h * .70f), Offset(w * .23f, h * .70f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .57f, h * .70f), Offset(w * .77f, h * .70f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .42f, h * .36f), Offset(w * .62f, h * .36f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .37f, h * .24f), Offset(w * .49f, h * .24f), stroke.width, StrokeCap.Round)
+            }
+            FitIcon.STRENGTH -> {
+                drawLine(color, Offset(w * .18f, h * .50f), Offset(w * .82f, h * .50f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .26f, h * .28f), Offset(w * .26f, h * .72f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .36f, h * .36f), Offset(w * .36f, h * .64f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .64f, h * .36f), Offset(w * .64f, h * .64f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * .74f, h * .28f), Offset(w * .74f, h * .72f), stroke.width, StrokeCap.Round)
             }
             FitIcon.TODAY -> {
                 drawCircle(color, w * .37f, Offset(w / 2, h / 2), style = stroke)
@@ -270,14 +328,59 @@ fun OutlineIcon(icon: FitIcon, color: Color, size: Dp = 25.dp) {
             }
             FitIcon.MOON -> {
                 val moon = Path().apply {
-                    moveTo(w * .82f, h * .53f)
-                    cubicTo(w * .82f, h * .75f, w * .64f, h * .88f, w * .45f, h * .84f)
-                    cubicTo(w * .22f, h * .80f, w * .10f, h * .58f, w * .14f, h * .37f)
-                    cubicTo(w * .17f, h * .20f, w * .30f, h * .10f, w * .45f, h * .10f)
-                    cubicTo(w * .43f, h * .34f, w * .58f, h * .51f, w * .82f, h * .53f)
+                    moveTo(w * .58f, h * .08f)
+                    cubicTo(w * .28f, h * .08f, w * .08f, h * .29f, w * .08f, h * .54f)
+                    cubicTo(w * .08f, h * .79f, w * .29f, h * .94f, w * .55f, h * .92f)
+                    cubicTo(w * .74f, h * .90f, w * .86f, h * .79f, w * .91f, h * .65f)
+                    cubicTo(w * .78f, h * .74f, w * .62f, h * .75f, w * .49f, h * .68f)
+                    cubicTo(w * .28f, h * .56f, w * .27f, h * .28f, w * .45f, h * .13f)
+                    cubicTo(w * .49f, h * .10f, w * .53f, h * .08f, w * .58f, h * .08f)
                     close()
                 }
                 drawPath(moon, color, style = stroke)
+            }
+            FitIcon.RESTFULNESS -> {
+                val leaf = Path().apply {
+                    moveTo(w * .16f, h * .72f)
+                    cubicTo(w * .20f, h * .30f, w * .53f, h * .12f, w * .86f, h * .16f)
+                    cubicTo(w * .89f, h * .50f, w * .68f, h * .82f, w * .35f, h * .84f)
+                    cubicTo(w * .25f, h * .84f, w * .18f, h * .80f, w * .16f, h * .72f)
+                }
+                drawPath(leaf, color, style = stroke)
+                drawLine(color, Offset(w * .18f, h * .80f), Offset(w * .70f, h * .32f), stroke.width, StrokeCap.Round)
+            }
+            FitIcon.RESTLESSNESS -> {
+                val activity = Path().apply {
+                    moveTo(w * .08f, h * .55f)
+                    lineTo(w * .25f, h * .55f)
+                    lineTo(w * .36f, h * .31f)
+                    lineTo(w * .48f, h * .75f)
+                    lineTo(w * .61f, h * .41f)
+                    lineTo(w * .71f, h * .55f)
+                    lineTo(w * .92f, h * .55f)
+                }
+                drawPath(activity, color, style = stroke)
+            }
+            FitIcon.REM -> {
+                val eye = Path().apply {
+                    moveTo(w * .08f, h * .52f)
+                    cubicTo(w * .27f, h * .24f, w * .73f, h * .24f, w * .92f, h * .52f)
+                    cubicTo(w * .73f, h * .80f, w * .27f, h * .80f, w * .08f, h * .52f)
+                    close()
+                }
+                drawPath(eye, color, style = stroke)
+                drawCircle(color, w * .12f, Offset(w * .5f, h * .52f), style = stroke)
+            }
+            FitIcon.DEEP -> {
+                repeat(3) { index ->
+                    val y = h * (.24f + index * .22f)
+                    val depth = Path().apply {
+                        moveTo(w * .20f, y)
+                        lineTo(w * .50f, y + h * .15f)
+                        lineTo(w * .80f, y)
+                    }
+                    drawPath(depth, color, style = stroke)
+                }
             }
             FitIcon.CALENDAR -> {
                 drawRoundRect(color, Offset(w * .12f, h * .18f), Size(w * .76f, h * .70f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .08f), style = stroke)
@@ -332,7 +435,7 @@ fun DataRow(
             Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(5.dp))
-                Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp), modifier = Modifier.padding(bottom = 3.dp))
+                Text(unit.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 8.sp))
             }
             if (onClick != null) {
                 Spacer(Modifier.width(8.dp))

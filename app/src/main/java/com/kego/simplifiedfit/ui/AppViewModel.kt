@@ -16,6 +16,7 @@ import com.kego.simplifiedfit.data.CoachProgress
 import com.kego.simplifiedfit.data.CoachProvider
 import com.kego.simplifiedfit.data.CoachRequest
 import com.kego.simplifiedfit.data.DailyHealth
+import com.kego.simplifiedfit.data.ExerciseSession
 import com.kego.simplifiedfit.data.GoogleCredentials
 import com.kego.simplifiedfit.data.GoogleHealthClient
 import com.kego.simplifiedfit.data.GoogleSetupCredentials
@@ -47,6 +48,7 @@ data class CoachTurn(
 
 data class AppUiState(
     val snapshot: HealthSnapshot,
+    val activities: List<ActivitySummary> = emptyList(),
     val googleConnected: Boolean,
     val coachConnected: Boolean,
     val syncing: Boolean = false,
@@ -83,7 +85,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         val local = app.healthRepository.recent()
-        if (local.isNotEmpty()) state = state.copy(snapshot = local.toSnapshot())
+        val activities = app.healthRepository.recentActivities().toActivitySummaries()
+        if (local.isNotEmpty() || activities.isNotEmpty()) {
+            state = state.copy(snapshot = local.toSnapshot(), activities = activities)
+        }
         observeHealthSync()
         if (state.googleConnected) sync()
         app.secureStore.currentCoachJobId()
@@ -109,11 +114,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             syncing = true,
                             syncError = null,
                         )
-                        WorkInfo.State.SUCCEEDED -> state.copy(
-                            snapshot = withContext(Dispatchers.IO) { app.healthRepository.recent() }.toSnapshot(),
-                            syncing = false,
-                            syncError = null,
-                        )
+                        WorkInfo.State.SUCCEEDED -> {
+                            val (health, activities) = withContext(Dispatchers.IO) {
+                                app.healthRepository.recent() to app.healthRepository.recentActivities()
+                            }
+                            state.copy(
+                                snapshot = health.toSnapshot(),
+                                activities = activities.toActivitySummaries(),
+                                syncing = false,
+                                syncError = null,
+                            )
+                        }
                         WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> state.copy(
                             syncing = false,
                             syncError = info.outputData.getString(HealthSyncWorker.KEY_ERROR)
@@ -150,11 +161,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val credentials = GoogleHealthClient(temporary).exchangeAuthorizationCode(authorizationCode.trim())
                     app.secureStore.saveGoogleCredentials(credentials)
                     app.secureStore.clearGoogleSetupCredentials()
-                    app.healthRepository.sync()
+                    app.healthRepository.sync() to app.healthRepository.recentActivities()
                 }
             }.onSuccess {
                 state = state.copy(
-                    snapshot = it.toSnapshot(),
+                    snapshot = it.first.toSnapshot(),
+                    activities = it.second.toActivitySummaries(),
                     googleConnected = true,
                     syncing = false,
                     syncError = null,
@@ -493,6 +505,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             restingHeartRateTrend = trend { it.restingHeartRate?.toFloat() },
             calorieTrend = trend { it.totalCalories?.toFloat() },
             coachContext = buildCoachContext(this, current, currentSleepBreakdown),
+        )
+    }
+
+    private fun List<ExerciseSession>.toActivitySummaries(): List<ActivitySummary> = map { activity ->
+        ActivitySummary(
+            id = activity.id,
+            startTime = activity.startTime,
+            type = activity.type,
+            name = activity.displayName,
+            activeDurationSeconds = activity.activeDurationSeconds,
+            caloriesKcal = activity.caloriesKcal?.roundToInt(),
+            distanceMeters = activity.distanceMeters,
+            steps = activity.steps,
+            averageHeartRate = activity.averageHeartRate,
+            activeZoneMinutes = activity.activeZoneMinutes,
+            averageSpeedMetersPerSecond = activity.averageSpeedMetersPerSecond,
+            averagePaceSeconds = activity.averagePaceSeconds,
+            elevationGainMeters = activity.elevationGainMeters,
         )
     }
 }

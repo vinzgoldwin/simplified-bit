@@ -14,6 +14,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.roundToLong
 
 data class SleepRecord(
     val date: LocalDate,
@@ -35,6 +36,24 @@ data class GoogleHealthBatch(
     val hrv: Map<LocalDate, Double>,
     val sleeps: Map<LocalDate, SleepRecord>,
     val latestHeartRate: Int?,
+    val activities: List<ExerciseSession>,
+)
+
+data class ExerciseSession(
+    val id: String,
+    val startTime: Instant,
+    val endTime: Instant,
+    val type: String,
+    val displayName: String,
+    val activeDurationSeconds: Long,
+    val caloriesKcal: Double?,
+    val distanceMeters: Double?,
+    val steps: Int?,
+    val averageHeartRate: Int?,
+    val activeZoneMinutes: Int?,
+    val averageSpeedMetersPerSecond: Double?,
+    val averagePaceSeconds: Double?,
+    val elevationGainMeters: Double?,
 )
 
 class GoogleHealthClient(
@@ -71,6 +90,7 @@ class GoogleHealthClient(
             hrv = dailyMetric(token, "daily-heart-rate-variability", "dailyHeartRateVariability", "averageHeartRateVariabilityMilliseconds"),
             sleeps = sleeps(token, sleepStart),
             latestHeartRate = latestHeartRate(token, today),
+            activities = exercises(token, today.minusDays(29)),
         )
     }
 
@@ -163,6 +183,56 @@ class GoogleHealthClient(
         return response.optJSONArray("dataPoints")?.optJSONObject(0)?.optJSONObject("heartRate")?.optInt("beatsPerMinute")
     }
 
+    private fun exercises(token: String, start: LocalDate): List<ExerciseSession> {
+        val filter = "exercise.interval.civil_start_time >= \"$start\""
+        val activities = mutableListOf<ExerciseSession>()
+        var pageToken: String? = null
+        do {
+            val url = buildString {
+                append("$API_ROOT/users/me/dataTypes/exercise/dataPoints:reconcile")
+                append("?dataSourceFamily=$ALL_SOURCES&pageSize=25&filter=${encode(filter)}")
+                pageToken?.let { append("&pageToken=${encode(it)}") }
+            }
+            val response = JSONObject(request(url, token = token))
+            response.optJSONArray("dataPoints").orEmpty().mapNotNullTo(activities, ::parseExercise)
+            pageToken = response.optString("nextPageToken").takeIf(String::isNotBlank)
+        } while (pageToken != null)
+        return activities.distinctBy(ExerciseSession::id).sortedByDescending(ExerciseSession::startTime)
+    }
+
+    internal fun parseExercise(point: JSONObject): ExerciseSession? {
+        val exercise = point.optJSONObject("exercise") ?: return null
+        val interval = exercise.optJSONObject("interval") ?: return null
+        val start = runCatching { Instant.parse(interval.getString("startTime")) }.getOrNull() ?: return null
+        val end = runCatching { Instant.parse(interval.getString("endTime")) }.getOrNull() ?: return null
+        val type = exercise.optString("exerciseType", "OTHER")
+        val typeName = type.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase)
+        val displayName = exercise.optString("displayName")
+            .takeIf(String::isNotBlank)
+            ?.takeUnless { it.equals("Activity", ignoreCase = true) && type != "OTHER" && type != "WORKOUT" }
+            ?: typeName
+        val metrics = exercise.optJSONObject("metricsSummary")
+        val id = point.optString("dataPointName").takeIf(String::isNotBlank)
+            ?: "$start-$type-${displayName.hashCode()}"
+        return ExerciseSession(
+            id = id,
+            startTime = start,
+            endTime = end,
+            type = type,
+            displayName = displayName,
+            activeDurationSeconds = protobufDurationSeconds(exercise.optString("activeDuration"))
+                ?: Duration.between(start, end).seconds.coerceAtLeast(0),
+            caloriesKcal = metrics.optDoubleOrNull("caloriesKcal"),
+            distanceMeters = metrics.optDoubleOrNull("distanceMillimeters")?.div(1_000.0),
+            steps = metrics.optIntOrNull("steps"),
+            averageHeartRate = metrics.optIntOrNull("averageHeartRateBeatsPerMinute"),
+            activeZoneMinutes = metrics.optIntOrNull("activeZoneMinutes"),
+            averageSpeedMetersPerSecond = metrics.optDoubleOrNull("averageSpeedMillimetersPerSecond")?.div(1_000.0),
+            averagePaceSeconds = metrics.optDoubleOrNull("averagePaceSecondsPerMeter")?.times(1_000),
+            elevationGainMeters = metrics.optDoubleOrNull("elevationGainMillimeters")?.div(1_000.0),
+        )
+    }
+
     private fun request(
         url: String,
         method: String = "GET",
@@ -196,8 +266,16 @@ class GoogleHealthClient(
 
     private fun JSONObject.toLocalDate() = LocalDate.of(getInt("year"), getInt("month"), getInt("day"))
 
-    private fun JSONObject.optIntOrNull(name: String): Int? =
-        if (has(name) && !isNull(name)) optInt(name) else null
+    private fun JSONObject?.optIntOrNull(name: String): Int? =
+        this?.takeIf { it.has(name) && !it.isNull(name) }?.optInt(name)
+
+    private fun JSONObject?.optDoubleOrNull(name: String): Double? =
+        this?.takeIf { it.has(name) && !it.isNull(name) }?.optDouble(name, Double.NaN)?.takeUnless(Double::isNaN)
+
+    private fun protobufDurationSeconds(value: String): Long? = value
+        .removeSuffix("s")
+        .toDoubleOrNull()
+        ?.roundToLong()
 
     private fun stageMinutes(segments: JSONArray?, type: String? = null): Int? {
         val matching = segments.orEmpty().filter { type == null || it.optString("type") == type }
@@ -225,6 +303,7 @@ class GoogleHealthClient(
         private const val API_ROOT = "https://health.googleapis.com/v4"
         private const val TOKEN_URL = "https://oauth2.googleapis.com/token"
         private const val GOOGLE_WEARABLES = "users/me/dataSourceFamilies/google-wearables"
+        private const val ALL_SOURCES = "users/me/dataSourceFamilies/all-sources"
         const val REDIRECT_URI = "https://www.google.com"
         val SCOPES = listOf(
             "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",

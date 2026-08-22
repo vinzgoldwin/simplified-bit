@@ -5,6 +5,8 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 
 data class DailyHealth(
     val date: LocalDate,
@@ -26,7 +28,7 @@ data class DailyHealth(
     val readinessScore: Int? = null,
 )
 
-class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 3) {
+class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -52,10 +54,12 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
             )
             """.trimIndent(),
         )
+        createActivitiesTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE daily_health ADD COLUMN restlessness_minutes INTEGER")
+        if (oldVersion < 4) createActivitiesTable(db)
     }
 
     fun upsert(day: DailyHealth) {
@@ -106,6 +110,68 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
         }
     }
 
+    fun replaceActivities(activities: List<ExerciseSession>) {
+        writableDatabase.apply {
+            beginTransaction()
+            try {
+                delete("activities", null, null)
+                activities.forEach { activity ->
+                    insertWithOnConflict(
+                        "activities",
+                        null,
+                        activity.toValues(),
+                        SQLiteDatabase.CONFLICT_REPLACE,
+                    )
+                }
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+    }
+
+    fun recentActivities(days: Int = 30): List<ExerciseSession> {
+        val start = LocalDate.now().minusDays((days - 1).coerceAtLeast(0).toLong())
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        return readableDatabase.query(
+            "activities",
+            null,
+            "start_time >= ?",
+            arrayOf(start.toString()),
+            null,
+            null,
+            "start_time DESC",
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    fun long(name: String) = cursor.getLong(cursor.getColumnIndexOrThrow(name))
+                    fun int(name: String) = cursor.getColumnIndexOrThrow(name).let { if (cursor.isNull(it)) null else cursor.getInt(it) }
+                    fun double(name: String) = cursor.getColumnIndexOrThrow(name).let { if (cursor.isNull(it)) null else cursor.getDouble(it) }
+                    add(
+                        ExerciseSession(
+                            id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
+                            startTime = Instant.ofEpochMilli(long("start_time")),
+                            endTime = Instant.ofEpochMilli(long("end_time")),
+                            type = cursor.getString(cursor.getColumnIndexOrThrow("type")),
+                            displayName = cursor.getString(cursor.getColumnIndexOrThrow("display_name")),
+                            activeDurationSeconds = long("active_duration_seconds"),
+                            caloriesKcal = double("calories_kcal"),
+                            distanceMeters = double("distance_meters"),
+                            steps = int("steps"),
+                            averageHeartRate = int("average_heart_rate"),
+                            activeZoneMinutes = int("active_zone_minutes"),
+                            averageSpeedMetersPerSecond = double("average_speed_meters_per_second"),
+                            averagePaceSeconds = double("average_pace_seconds"),
+                            elevationGainMeters = double("elevation_gain_meters"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     private fun DailyHealth.toValues() = ContentValues().apply {
         put("date", date.toString())
         put("steps", steps)
@@ -125,5 +191,45 @@ class HealthDatabase(context: Context) : SQLiteOpenHelper(context, "health.db", 
         put("sleep_score", sleepScore)
         put("readiness_score", readinessScore)
         put("synced_at", System.currentTimeMillis())
+    }
+
+    private fun ExerciseSession.toValues() = ContentValues().apply {
+        put("id", id)
+        put("start_time", startTime.toEpochMilli())
+        put("end_time", endTime.toEpochMilli())
+        put("type", type)
+        put("display_name", displayName)
+        put("active_duration_seconds", activeDurationSeconds)
+        put("calories_kcal", caloriesKcal)
+        put("distance_meters", distanceMeters)
+        put("steps", steps)
+        put("average_heart_rate", averageHeartRate)
+        put("active_zone_minutes", activeZoneMinutes)
+        put("average_speed_meters_per_second", averageSpeedMetersPerSecond)
+        put("average_pace_seconds", averagePaceSeconds)
+        put("elevation_gain_meters", elevationGainMeters)
+    }
+
+    private fun createActivitiesTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS activities (
+                id TEXT PRIMARY KEY,
+                start_time INTEGER NOT NULL,
+                end_time INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                active_duration_seconds INTEGER NOT NULL,
+                calories_kcal REAL,
+                distance_meters REAL,
+                steps INTEGER,
+                average_heart_rate INTEGER,
+                active_zone_minutes INTEGER,
+                average_speed_meters_per_second REAL,
+                average_pace_seconds REAL,
+                elevation_gain_meters REAL
+            )
+            """.trimIndent(),
+        )
     }
 }

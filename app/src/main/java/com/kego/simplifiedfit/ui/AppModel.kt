@@ -1,10 +1,27 @@
 package com.kego.simplifiedfit.ui
 
 import com.kego.simplifiedfit.domain.SleepScoreBreakdown
+import java.time.Instant
 
 data class DayPoint(
     val label: String,
     val value: Float,
+)
+
+data class ActivitySummary(
+    val id: String,
+    val startTime: Instant,
+    val type: String,
+    val name: String,
+    val activeDurationSeconds: Long,
+    val caloriesKcal: Int?,
+    val distanceMeters: Double?,
+    val steps: Int?,
+    val averageHeartRate: Int?,
+    val activeZoneMinutes: Int?,
+    val averageSpeedMetersPerSecond: Double?,
+    val averagePaceSeconds: Double?,
+    val elevationGainMeters: Double?,
 )
 
 data class HealthSnapshot(
@@ -41,6 +58,6 @@ data class HealthSnapshot(
     }
 }
 
-enum class Destination { TODAY, COACH }
+enum class Destination { TODAY, ACTIVITIES, COACH }
 
 enum class Detail { READINESS, SLEEP, STEPS, HEART, CALORIES, HRV, RESTING_HEART_RATE }

@@ -21,6 +21,15 @@ class AppModelTest {
     }
 
     @Test
+    fun `activity duration uses compact history formatting`() {
+        assertEquals("42:18", formatActivityDuration(2_538))
+        assertEquals("4h 28m", formatActivityDuration(16_080))
+        assertEquals("1:04:12", formatActivityDuration(3_852))
+        assertEquals("3h 13m", formatActivityTotalDuration(11_634))
+        assertEquals("1:05:00", formatActivityDetailDuration(3_900))
+    }
+
+    @Test
     fun `coach context includes recovery baselines sleep details and trends`() {
         val currentDate = LocalDate.of(2026, 8, 14)
         val prior = DailyHealth(
