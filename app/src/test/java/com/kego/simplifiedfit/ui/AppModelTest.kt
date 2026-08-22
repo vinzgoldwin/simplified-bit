@@ -60,7 +60,7 @@ class AppModelTest {
         )
 
         assertEquals(
-            listOf("Active time", "Active energy", "Average heart rate", "Active zone minutes"),
+            listOf("Active time", "Average heart rate", "Active energy", "Active zone minutes"),
             metrics.map(ActivityMetric::label),
         )
     }
@@ -94,8 +94,8 @@ class AppModelTest {
         assertEquals(
             listOf(
                 "Distance",
-                "Average pace",
                 "Active time",
+                "Average pace",
                 "Elevation gain",
                 "Active energy",
                 "Average heart rate",
@@ -104,7 +104,7 @@ class AppModelTest {
             ),
             metrics.map(ActivityMetric::label),
         )
-        assertEquals(ActivityMetric("Average pace", "14:35", "/km"), metrics[1])
+        assertEquals(ActivityMetric("Average pace", "14:35", "/km"), metrics[2])
     }
 
     @Test
@@ -135,8 +135,8 @@ class AppModelTest {
         assertEquals(
             listOf(
                 "Distance",
-                "Average speed",
                 "Active time",
+                "Average speed",
                 "Elevation gain",
                 "Active energy",
                 "Average heart rate",

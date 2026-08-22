@@ -490,10 +490,11 @@ private fun ActivityDetailScreen(activity: ActivitySummary, onBack: () -> Unit) 
             Spacer(Modifier.height(28.dp))
             metrics.chunked(2).forEachIndexed { index, rowMetrics ->
                 Row(Modifier.fillMaxWidth()) {
+                    if (rowMetrics.size == 1) Spacer(Modifier.weight(.5f))
                     rowMetrics.forEach { metric ->
-                        ActivityDetailMetric(metric, Modifier.weight(1f))
+                        ActivityDetailMetric(metric, primary = index == 0, modifier = Modifier.weight(1f))
                     }
-                    if (rowMetrics.size == 1) Spacer(Modifier.weight(1f))
+                    if (rowMetrics.size == 1) Spacer(Modifier.weight(.5f))
                 }
                 if (index < metrics.lastIndex / 2) Spacer(Modifier.height(23.dp))
             }
@@ -505,9 +506,13 @@ private fun ActivityDetailScreen(activity: ActivitySummary, onBack: () -> Unit) 
 internal data class ActivityMetric(val label: String, val value: String, val unit: String = "")
 
 @Composable
-private fun ActivityDetailMetric(metric: ActivityMetric, modifier: Modifier = Modifier) {
+private fun ActivityDetailMetric(metric: ActivityMetric, primary: Boolean, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(metric.label.uppercase(), color = FitColors.Muted, style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = .8.sp))
+        Text(
+            metric.label.uppercase(),
+            color = if (primary) FitColors.White.copy(alpha = .72f) else FitColors.Muted,
+            style = FitType.Eyebrow.copy(fontSize = 7.sp, letterSpacing = .8.sp),
+        )
         Spacer(Modifier.height(5.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Text(metric.value, color = FitColors.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -547,10 +552,14 @@ internal fun activityDetailMetrics(activity: ActivitySummary): List<ActivityMetr
     }
     val pace = paceSeconds?.let { ActivityMetric("Average pace", formatActivityPace(it), "/km") }
 
-    val ordered = when (activityIcon(activity.type)) {
-        FitIcon.RUN, FitIcon.WALK -> listOf(distance, pace, duration, elevation, calories, heartRate, steps, zoneMinutes)
-        FitIcon.BIKE -> listOf(distance, speed, duration, elevation, calories, heartRate, zoneMinutes)
-        FitIcon.STRENGTH -> listOf(duration, calories, heartRate, zoneMinutes, steps)
+    val ordered = when {
+        activity.type.equals("MOTORCYCLE", ignoreCase = true) ->
+            listOf(duration, heartRate, calories, zoneMinutes, distance, speed, steps, elevation)
+        activityIcon(activity.type) in listOf(FitIcon.RUN, FitIcon.WALK) ->
+            listOf(distance, duration, pace, elevation, calories, heartRate, steps, zoneMinutes)
+        activityIcon(activity.type) == FitIcon.BIKE ->
+            listOf(distance, duration, speed, elevation, calories, heartRate, zoneMinutes)
+        activityIcon(activity.type) == FitIcon.STRENGTH -> listOf(duration, calories, heartRate, zoneMinutes, steps)
         else -> listOf(duration, calories, heartRate, zoneMinutes, distance, speed, steps, elevation)
     }
     return ordered.filterNotNull()
